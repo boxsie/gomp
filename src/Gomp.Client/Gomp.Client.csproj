@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Gomp.Client.Tests" />
+    <InternalsVisibleTo Include="Gomp.Integration" />
   </ItemGroup>
 
 </Project>

@@ -16,8 +16,7 @@ public sealed class GompClientTests
         var fake = new FakeTransport(self);
         await using var client = new GompClient(fake);
 
-        // Establish first so the admin send runs synchronously (no event race).
-        await fake.RaiseConnectedAsync(Host);
+        // Dialers just send: the request goes out immediately (the daemon auto-dials).
         var task = client.CreateRoomAsync(Host, "pub", RoomKind.Open);
 
         var req = Assert.Single(
@@ -41,7 +40,6 @@ public sealed class GompClientTests
         var fake = new FakeTransport(self);
         await using var client = new GompClient(fake);
 
-        await fake.RaiseConnectedAsync(Host);
         var task = client.CloseRoomAsync(Host, "pub");
         var req = Assert.Single(fake.AdminEnvelopesTo(Host), e => e.BodyCase == AdminEnvelope.BodyOneofCase.Request).Request;
 
@@ -55,16 +53,16 @@ public sealed class GompClientTests
     }
 
     [Fact]
-    public async Task JoinRoom_OnConnect_AnnouncesHello()
+    public async Task JoinRoom_AnnouncesHelloImmediately()
     {
         var self = new FakeIdentity("Eself");
         var fake = new FakeTransport(self);
         await using var client = new GompClient(fake);
 
+        // A dialer announces eagerly: Hello goes out on join — the first room-ops
+        // send auto-dials the room — without waiting for a connection_established
+        // event (which the daemon never emits to a pure dialer).
         await client.JoinRoomAsync(Room, new RecordingObserver());
-        Assert.Contains(Room, fake.Connected);
-
-        await fake.RaiseConnectedAsync(Room);
 
         Assert.Contains(fake.RoomEnvelopesTo(Room), e => e.BodyCase == RoomEnvelope.BodyOneofCase.Hello);
     }
@@ -97,10 +95,9 @@ public sealed class GompClientTests
         var fake = new FakeTransport(self);
         await using var client = new GompClient(fake);
 
-        await client.JoinRoomAsync(Room, new RecordingObserver());
-        await fake.RaiseConnectedAsync(Room);          // initial join → Hello #1
+        await client.JoinRoomAsync(Room, new RecordingObserver());   // eager join → Hello #1
         await fake.RaiseDisconnectedAsync(Room);       // transient drop
-        await fake.RaiseConnectedAsync(Room);          // watchdog re-dial → Hello #2
+        await fake.RaiseConnectedAsync(Room);          // re-establish → Hello #2
 
         var hellos = fake.RoomEnvelopesTo(Room).Count(e => e.BodyCase == RoomEnvelope.BodyOneofCase.Hello);
         Assert.Equal(2, hellos);

@@ -11,6 +11,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Gomp.App.Tests/Gomp.App.Tests.csproj" />
     <Project Path="tests/Gomp.Client.Tests/Gomp.Client.Tests.csproj" />
+    <Project Path="tests/Gomp.Integration/Gomp.Integration.csproj" />
     <Project Path="tests/Gomp.Host.Tests/Gomp.Host.Tests.csproj" />
   </Folder>
 </Solution>

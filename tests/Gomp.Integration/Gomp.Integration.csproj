@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <LangVersion>latest</LangVersion>
+    <!-- AssemblyName must match the InternalsVisibleTo grant in Gomp.Host. -->
+    <AssemblyName>Gomp.Integration</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- Dynamic skip: the live e2e spawns real ensemble daemons, so it stays
+         dormant (Skipped) on a default `dotnet test Gomp.slnx` run and only
+         fires when explicitly enabled (GOMP_E2E=1 + a reachable daemon binary) —
+         the C# analogue of the SDK's `-tags integration` gate. -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Gomp.Client\Gomp.Client.csproj" />
+    <ProjectReference Include="..\..\src\Gomp.Host\Gomp.Host.csproj" />
+    <ProjectReference Include="..\..\src\Gomp.Protocol\Gomp.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>

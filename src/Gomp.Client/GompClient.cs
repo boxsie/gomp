@@ -32,11 +32,6 @@ public sealed class GompClient : IAsyncDisposable
     private readonly ConcurrentDictionary<string, RoomSession> _rooms = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<AdminResponse>> _pendingAdmin = new();
 
-    // Peers whose link is currently up, and one-shot waiters for a connect that
-    // hasn't established yet (admin needs an established link before it sends).
-    private readonly ConcurrentDictionary<string, byte> _established = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, TaskCompletionSource> _connectWaiters = new(StringComparer.Ordinal);
-
     private readonly SemaphoreSlim _bindingLock = new(1, 1);
     private IdentityBinding? _ownBinding;
 
@@ -116,11 +111,12 @@ public sealed class GompClient : IAsyncDisposable
 
         try
         {
-            await _tx.ConnectAsync(roomAddress, ct).ConfigureAwait(false);
-            // Already connected (idempotent re-join of a live peer)? Kick the
-            // Hello now — no PeerConnected event will fire to do it for us.
-            if (_established.ContainsKey(roomAddress))
-                await session.OnConnectedAsync(ct).ConfigureAwait(false);
+            // Announce proactively. The daemon auto-dials the room on this first
+            // room-ops send (handleSend establishes a service-identity link on
+            // demand and retries), and a pure DIALER never receives a
+            // connection_established event — the daemon emits that only to the
+            // inbound/responder side (ADR-0007 §5) — so there is nothing to wait on.
+            await session.OnConnectedAsync(ct).ConfigureAwait(false);
         }
         catch
         {
@@ -175,7 +171,10 @@ public sealed class GompClient : IAsyncDisposable
 
         try
         {
-            await WaitConnectedAsync(hostBase, ct).ConfigureAwait(false);
+            // Just send: the daemon auto-dials + retries the first SendBytes to an
+            // unconnected peer (handleSend), and the host's reply rides that inbound
+            // link. A dialer is never told "connected", so there is nothing to await
+            // before sending — only the correlated response.
             await _tx.SendAsync(hostBase, new AdminEnvelope { Request = req }.ToByteArray(), ct).ConfigureAwait(false);
             return await tcs.Task.WaitAsync(ct).ConfigureAwait(false);
         }
@@ -185,44 +184,21 @@ public sealed class GompClient : IAsyncDisposable
         }
     }
 
-    /// <summary>Dial <paramref name="addr"/> if needed and return once its link
-    /// is established (admin must not send before the host can receive).</summary>
-    private async Task WaitConnectedAsync(string addr, CancellationToken ct)
-    {
-        if (_established.ContainsKey(addr))
-            return;
-
-        var tcs = _connectWaiters.GetOrAdd(
-            addr, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
-        await _tx.ConnectAsync(addr, ct).ConfigureAwait(false);
-        // A PeerConnected may have raced in between the check and the dial.
-        if (_established.ContainsKey(addr))
-        {
-            tcs.TrySetResult();
-            return;
-        }
-        using var reg = ct.Register(() => tcs.TrySetCanceled(ct));
-        await tcs.Task.ConfigureAwait(false);
-    }
-
     // ---- inbound event router ----
 
     private async Task OnPeerConnectedAsync(string addr)
     {
-        _established[addr] = 0;
-        if (_connectWaiters.TryRemove(addr, out var waiter))
-            waiter.TrySetResult();
+        // Reconnect re-announce: if a joined room's link re-establishes, re-send
+        // Hello so the host (which drops a member's binding on disconnect) re-learns
+        // it. NOTE: on the current platform a pure dialer does NOT receive
+        // connection_established (only the inbound side does), so this fires only if
+        // a peer dials US — best-effort reconnect coverage until dialer-side
+        // lifecycle events exist. The first announce happens eagerly in JoinRoom.
         if (_rooms.TryGetValue(addr, out var session))
             await session.OnConnectedAsync().ConfigureAwait(false);
     }
 
-    private Task OnPeerDisconnectedAsync(string addr)
-    {
-        _established.TryRemove(addr, out _);
-        // Keep the RoomSession: the daemon's watchdog re-dials and a fresh
-        // PeerConnected re-announces our Hello. Admin re-connects on next call.
-        return Task.CompletedTask;
-    }
+    private Task OnPeerDisconnectedAsync(string addr) => Task.CompletedTask;
 
     private async Task OnMessageReceivedAsync(string from, byte[] payload)
     {
@@ -260,8 +236,6 @@ public sealed class GompClient : IAsyncDisposable
         _tx.MessageReceived -= OnMessageReceivedAsync;
 
         foreach (var kvp in _pendingAdmin)
-            kvp.Value.TrySetCanceled();
-        foreach (var kvp in _connectWaiters)
             kvp.Value.TrySetCanceled();
 
         if (_ownsTransport && _tx is IAsyncDisposable d)

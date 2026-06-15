@@ -268,6 +268,29 @@ internal sealed class RoomHost : IAsyncDisposable
         return Ok(reqId);
     }
 
+    // ---- test seam (integration e2e only; see InternalsVisibleTo) ----
+
+    /// <summary>
+    /// Integration-test seam: the live <see cref="RegisteredService"/> backing the
+    /// sub-identity for room <paramref name="name"/>, plus its address. An honest
+    /// submit is sender-checked (<c>sender_mismatch</c>), so the only way a Forged
+    /// post reaches a member is a MALICIOUS host fabricating a fan-out under a
+    /// member's name — this hands the e2e exactly that capability. Returns null if
+    /// no such room is live.
+    /// </summary>
+    internal async Task<(RegisteredService Service, string Address)?> DebugRoomServiceAsync(string name)
+    {
+        await _roomsLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return _rooms.TryGetValue(name, out var h) ? (h.Service, h.Room.Address) : null;
+        }
+        finally
+        {
+            _roomsLock.Release();
+        }
+    }
+
     // ---- room registration ----
 
     private async Task<RoomHandle> RegisterRoomAsync(RoomRecord rec, CancellationToken ct)
