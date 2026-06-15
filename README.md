@@ -1,5 +1,10 @@
 # gomp
 
+> ⚠️ **Hobby project — don't take it seriously.** This is just someone having fun
+> building things in their spare time. It is **not secure**, **not complete**, and
+> **not production-ready**. There are no guarantees, no support, and no warranty —
+> don't trust it with anything that matters. Use at your own risk.
+
 **G.O.M.P. — "Get Outta My Pub."** A small, self-hostable, decentralized
 take on a Discord server, built on [Ensemble](https://github.com/boxsie/ensemble).
 A room is a place you walk into; while its host is up, you can join, chat, and
