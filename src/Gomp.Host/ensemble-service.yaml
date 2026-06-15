@@ -1,0 +1,46 @@
+# Ensemble room-host package manifest (ADR-0009 §2 / ADR-0007).
+#
+# A daemon-supervised service that registers a base identity plus one
+# sub-identity per room. `sub_identities: true` is the consent-relevant
+# capability that authorizes minting `<rooms>/<room>` identities at runtime.
+#
+# The capability ceiling is the WIDEST a room may be: `acl: public` so the host
+# can mint open rooms (PUBLIC); invite (ALLOWLIST), friends (CONTACTS) and the
+# base identity (ALLOWLIST) all fit under it (ADR-0007 §2 ceiling inheritance).
+#
+# Frontend is `none` here: this package is the room SERVER. The launched room
+# client (gomp, ADR-0010 tier 3) is added to this same install unit — a
+# `frontend: launched_client` + `client:` block — when that client lands.
+
+name: rooms
+version: 0.1.0
+description: >-
+  Host-led group rooms (ADR-0007): create, join and chat in small,
+  self-hostable rooms with history backfill and presence.
+
+entrypoint:
+  command: ["gomp-host"]
+
+runtime:
+  requires:
+    - binary: dotnet
+      min_version: "8.0"
+
+capabilities:
+  transport: rpc
+  acl: public
+  sub_identities: true
+  max_payload_bytes: 131072
+
+settings:
+  - key: ROOM_HOST_OWNER
+    label: Owner address
+    description: The operator E-address with full admin authority over this host and its rooms.
+    type: address
+    required: true
+  - key: ROOM_HISTORY_MAX
+    label: Per-room history limit
+    description: Maximum messages retained per room before the oldest are dropped (backfill window).
+    type: int
+    default: "1000"
+    min: 1

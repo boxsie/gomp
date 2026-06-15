@@ -1,0 +1,184 @@
+syntax = "proto3";
+
+package ensemble.rooms.v1;
+
+option csharp_namespace = "Gomp.Protocol";
+
+// Room-ops wire protocol (ADR-0007). These messages travel as the opaque
+// `payload` of the daemon's SERVICE_TRANSPORT_RPC envelope — the host service
+// and the room client define this schema between themselves; the daemon never
+// parses it. Two transports:
+//
+//   * Member <-> room sub-identity (<host>/<room>): RoomEnvelope.
+//   * Owner/admin <-> host base identity (<host>):  AdminEnvelope. Admin ops
+//     are in-band over the base identity (ADR-0007 §4), NOT node RPCs.
+//
+// Attribution (ADR-0007 §6): a member's post is a SignedPost the host relays
+// VERBATIM, so other members verify authorship without trusting the host's
+// relay. The host attributes the transport-verified from_addr but never forges
+// — it cannot produce a member's signature.
+
+// ---- Member <-> room sub-identity --------------------------------------
+
+message RoomEnvelope {
+  oneof body {
+    // member -> room
+    SubmitPost      submit        = 1;
+    BackfillRequest backfill_req  = 2;
+    RosterRequest   roster_req    = 3;
+
+    // room -> member
+    RoomMessage      message      = 10;  // a delivered / fanned-out post
+    BackfillResponse backfill_resp = 11;
+    Roster           roster       = 12;
+    PresenceUpdate   presence     = 13;
+    RoomError        error        = 14;
+  }
+}
+
+// A member submits a post to the room. The host verifies the transport
+// from_addr matches SignedPostBody.sender (cheap anti-spoof), assigns a
+// sequence, persists, and fans the SignedPost out verbatim.
+message SubmitPost {
+  SignedPost post = 1;
+}
+
+// The exact bytes a member signs. Carried as `SignedPost.body` so the
+// signature covers a stable byte string (proto3 has no canonical form, so we
+// sign the serialized blob, not the re-encoded message). Binds the author and
+// room so a captured post can't be replayed into another room or as another
+// author.
+message SignedPostBody {
+  string sender    = 1;  // author E-address (must equal the transport from_addr)
+  string room      = 2;  // room E-address this post belongs to
+  bytes  content   = 3;  // application content (chat text, etc.) — opaque to the host
+  int64  client_ts = 4;  // author wall clock, unix millis
+  string nonce     = 5;  // per-message unique token; dedup / message-id basis
+}
+
+// A member-authored, member-signed payload the host relays verbatim. The host
+// does NOT verify `sig` (it has no author pubkey); recipients verify `sig`
+// over `body` against SignedPostBody.sender's key. The from_addr==sender check
+// at submit time blocks a member posting under someone else's name.
+message SignedPost {
+  bytes body = 1;  // serialized SignedPostBody (the signed bytes)
+  bytes sig  = 2;  // signature over `body` by the sender's identity key
+}
+
+// A stored / delivered post: the host wraps the verbatim SignedPost with its
+// own sequence + receive time. seq/host_ts are host-asserted (outside the
+// signature) — the host may reorder or drop, but cannot forge authorship.
+message RoomMessage {
+  int64      seq     = 1;  // host-assigned monotonic sequence; the backfill cursor
+  int64      host_ts = 2;  // host receive time, unix millis
+  SignedPost post    = 3;  // verbatim sender-signed payload
+}
+
+// Fetch history after a cursor. since_seq=0 means "from the beginning the host
+// still retains". The host returns up to `limit` messages (server-capped).
+message BackfillRequest {
+  int64 since_seq = 1;
+  int32 limit     = 2;  // 0 = host default
+}
+
+message BackfillResponse {
+  repeated RoomMessage messages   = 1;
+  int64                latest_seq = 2;  // highest seq the host holds
+  bool                 complete   = 3;  // false => truncated by limit, fetch again from last seq
+}
+
+message RosterRequest {}
+
+message Roster {
+  repeated Member members = 1;
+}
+
+message Member {
+  string addr   = 1;
+  bool   online = 2;
+}
+
+// Pushed to other connected members when a member connects/disconnects (§8).
+message PresenceUpdate {
+  string addr   = 1;
+  bool   online = 2;
+}
+
+message RoomError {
+  string code    = 1;  // stable classifier, e.g. "sender_mismatch", "wrong_room"
+  string message = 2;
+}
+
+// ---- Owner/admin <-> host base identity --------------------------------
+
+message AdminEnvelope {
+  oneof body {
+    AdminRequest  request  = 1;
+    AdminResponse response = 2;
+  }
+}
+
+enum RoomKind {
+  ROOM_KIND_UNSPECIFIED = 0;
+  ROOM_KIND_OPEN        = 1;  // -> ACL PUBLIC   (anyone may dial in)
+  ROOM_KIND_FRIENDS     = 2;  // -> ACL CONTACTS (host's contacts)
+  ROOM_KIND_INVITE      = 3;  // -> ACL ALLOWLIST (added member addresses)
+}
+
+message AdminRequest {
+  string request_id = 1;  // echoed in the response for correlation
+  oneof op {
+    CreateRoom   create_room   = 2;
+    CloseRoom    close_room    = 3;
+    ListRooms    list_rooms    = 4;
+    AddMember    add_member    = 5;
+    RemoveMember remove_member = 6;  // revokes + kicks if connected
+    PromoteAdmin promote_admin = 7;
+    DemoteAdmin  demote_admin  = 8;
+  }
+}
+
+message CreateRoom {
+  string          name    = 1;  // room slug (the <host>/<name> sub-identity)
+  RoomKind        kind    = 2;
+  repeated string members = 3;  // initial allowlist for ROOM_KIND_INVITE
+}
+
+message CloseRoom {
+  string name = 1;
+}
+
+message ListRooms {}
+
+message AddMember {
+  string room = 1;
+  string addr = 2;
+}
+
+message RemoveMember {
+  string room = 1;
+  string addr = 2;
+}
+
+message PromoteAdmin {
+  string addr = 1;
+}
+
+message DemoteAdmin {
+  string addr = 1;
+}
+
+message AdminResponse {
+  string            request_id = 1;
+  bool              ok         = 2;
+  string            error      = 3;  // populated when ok=false
+  repeated RoomInfo rooms      = 4;  // create_room: the new room; list_rooms: all rooms
+}
+
+message RoomInfo {
+  string   name    = 1;
+  string   addr    = 2;  // the room's E-address — share to invite members to dial
+  RoomKind kind    = 3;
+  int32    members = 4;  // allowlist size (invite rooms)
+  int32    online  = 5;  // currently connected members
+}

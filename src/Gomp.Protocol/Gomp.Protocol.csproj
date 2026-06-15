@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Gomp.Protocol</RootNamespace>
+    <AssemblyName>Gomp.Protocol</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
+    <!-- Generated protobuf code carries no XML docs. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.27.3" />
+    <PackageReference Include="Grpc.Tools" Version="2.65.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The room-ops wire schema. Plain messages, no gRPC services — they ride
+         the daemon's SERVICE_TRANSPORT_RPC envelope as opaque bytes. Shared by
+         the room host and the launched room client (ADR-0010/0011). -->
+    <Protobuf Include="proto\rooms.proto"
+              GrpcServices="None"
+              ProtoRoot="proto"
+              Link="proto\rooms.proto" />
+  </ItemGroup>
+
+</Project>
