@@ -1,0 +1,333 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Gomp.App.ViewModels"
+        xmlns:conv="clr-namespace:Gomp.App.Converters"
+        x:Class="Gomp.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="gomp"
+        Width="1180" Height="760"
+        MinWidth="940" MinHeight="580"
+        Background="{StaticResource BgBase}"
+        FontFamily="{StaticResource FontUi}"
+        TransparencyLevelHint="None">
+
+    <Grid>
+
+        <!-- ========================= CONNECTED SHELL ========================= -->
+        <Grid IsVisible="{Binding IsConnected}" ColumnDefinitions="264,*,252">
+
+            <!-- left rail: rooms + identity -->
+            <Border Grid.Column="0" Background="{StaticResource BgBase}"
+                    BorderBrush="{StaticResource Hairline}" BorderThickness="0,0,1,0">
+                <Grid RowDefinitions="Auto,*,Auto">
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="22,22,22,10">
+                        <Ellipse Width="11" Height="11" Fill="{StaticResource Accent}" VerticalAlignment="Center" />
+                        <TextBlock Classes="wordmark" Text="gomp" />
+                    </StackPanel>
+
+                    <DockPanel Grid.Row="1" Margin="12,8,12,0">
+                        <TextBlock DockPanel.Dock="Top" Classes="label" Text="YOUR ROOMS" Margin="10,6,10,8" />
+                        <ScrollViewer>
+                            <ListBox ItemsSource="{Binding Rooms}" SelectedItem="{Binding SelectedRoom}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RoomViewModel">
+                                        <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}">
+                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                <Border Grid.Column="0" Width="38" Height="38"
+                                                        CornerRadius="{StaticResource RadiusMd}"
+                                                        Background="{StaticResource AccentSoft}">
+                                                    <TextBlock Text="{Binding Initial}" FontWeight="ExtraBold"
+                                                               FontSize="17" Foreground="{StaticResource AccentGlow}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Margin="11,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Classes="faint" Text="{Binding KindLabel}" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5"
+                                                            VerticalAlignment="Center">
+                                                    <Ellipse Classes="dot" Classes.online="{Binding HasOnline}"
+                                                             VerticalAlignment="Center" />
+                                                    <TextBlock Classes="faint" Text="{Binding OnlineCount}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </ScrollViewer>
+                    </DockPanel>
+
+                    <StackPanel Grid.Row="2" Margin="16" Spacing="9">
+                        <Button Classes="ghost" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left" Padding="14,10"
+                                Command="{Binding ShowCreateCommand}" Content="＋  create a room" />
+                        <Button Classes="ghost" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left" Padding="14,10"
+                                Command="{Binding ShowJoinCommand}" Content="↪  join by address" />
+                        <Border Background="{StaticResource BgSurface}" Padding="13,11"
+                                CornerRadius="{StaticResource RadiusMd}"
+                                BorderBrush="{StaticResource Hairline}" BorderThickness="1">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Classes="label" Text="YOU" />
+                                    <TextBlock Classes="mono" Text="{Binding ShortSelf}"
+                                               Foreground="{StaticResource AccentGlow}" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Classes="link" Click="OnCopySelf"
+                                        ToolTip.Tip="copy your address" Content="copy" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- centre: the room -->
+            <Panel Grid.Column="1">
+
+                <!-- empty state -->
+                <StackPanel IsVisible="{Binding !HasSelection}" VerticalAlignment="Center"
+                            HorizontalAlignment="Center" Spacing="14" MaxWidth="380">
+                    <TextBlock Text="gomp" FontWeight="ExtraBold" FontSize="40" LetterSpacing="-1.5"
+                               Foreground="{StaticResource TextFaint}" HorizontalAlignment="Center" />
+                    <TextBlock Classes="muted" TextAlignment="Center"
+                               Text="It's quiet in here. Create a room or join one by address to get started." />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                        <Button Classes="primary" Command="{Binding ShowCreateCommand}" Content="create a room" />
+                        <Button Classes="ghost" Command="{Binding ShowJoinCommand}" Content="join by address" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- the room -->
+                <Grid IsVisible="{Binding HasSelection}" RowDefinitions="Auto,Auto,*,Auto">
+
+                    <!-- header -->
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="26,20,22,16">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBlock Classes="h1" Text="{Binding SelectedRoom.Title}"
+                                           VerticalAlignment="Center" />
+                                <Border Classes="accentChip" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding SelectedRoom.KindLabel}" FontSize="11"
+                                               FontWeight="SemiBold" Foreground="{StaticResource AccentGlow}" />
+                                </Border>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="7" Margin="0,6,0,0">
+                                <Ellipse Classes="dot" Classes.online="{Binding SelectedRoom.HasOnline}"
+                                         VerticalAlignment="Center" />
+                                <TextBlock Classes="faint" Text="{Binding SelectedRoom.OnlineCount, StringFormat='{}{0} online'}" />
+                                <TextBlock Classes="faint" Text="·  you own this room"
+                                           Foreground="{StaticResource AccentGlow}"
+                                           IsVisible="{Binding SelectedRoom.IsOwner}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="link" VerticalAlignment="Center"
+                                Command="{Binding SelectedRoom.LeaveCommand}" Content="leave" />
+                    </Grid>
+
+                    <!-- forgery flag -->
+                    <Border Grid.Row="1" Margin="26,0,22,8" Padding="12,8"
+                            Background="#2A0E0D" CornerRadius="{StaticResource RadiusSm}"
+                            BorderBrush="{StaticResource Danger}" BorderThickness="1"
+                            IsVisible="{Binding SelectedRoom.SawForgery}">
+                        <TextBlock Text="⚠  a forged message was seen in this room — check the badges."
+                                   Foreground="#FF9B96" FontSize="12" />
+                    </Border>
+
+                    <!-- chat -->
+                    <ScrollViewer Grid.Row="2" Name="ChatScroll" Padding="20,0,18,8"
+                                  VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding SelectedRoom.Messages}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MessageViewModel">
+                                    <Panel>
+                                        <!-- system line -->
+                                        <Border IsVisible="{Binding IsSystem}" Classes="chip"
+                                                HorizontalAlignment="Center" Margin="0,8">
+                                            <TextBlock Text="{Binding Content}" Classes="faint"
+                                                       TextAlignment="Center" />
+                                        </Border>
+                                        <!-- message line -->
+                                        <Border IsVisible="{Binding !IsSystem}" Classes="msgRow"
+                                                Padding="8,4" CornerRadius="{StaticResource RadiusSm}"
+                                                Opacity="{Binding RowOpacity}">
+                                            <Grid ColumnDefinitions="Auto,*">
+                                                <TextBlock Grid.Column="0" Classes="mono faint" Text="{Binding TimeText}"
+                                                           VerticalAlignment="Top" Margin="0,2,10,0" />
+                                                <WrapPanel Grid.Column="1">
+                                                    <TextBlock Text="{Binding TrustGlyph}" FontWeight="Bold"
+                                                               Margin="0,0,5,0" VerticalAlignment="Center"
+                                                               IsVisible="{Binding ShowTrustBadge}"
+                                                               ToolTip.Tip="{Binding TrustTooltip}"
+                                                               Foreground="{Binding TrustColorHex, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="Bold"
+                                                               Margin="0,0,4,0"
+                                                               Foreground="{Binding NameColorHex, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                                                    <Border Classes="accentChip" Padding="6,0" Margin="0,0,6,0"
+                                                            VerticalAlignment="Center" IsVisible="{Binding IsSelf}">
+                                                        <TextBlock Text="you" FontSize="10"
+                                                                   Foreground="{StaticResource AccentGlow}" />
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Content}" Foreground="{StaticResource TextPrimary}" />
+                                                </WrapPanel>
+                                            </Grid>
+                                        </Border>
+                                    </Panel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- composer -->
+                    <Border Grid.Row="3" Margin="18,4,18,18" Background="{StaticResource BgInput}"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            BorderBrush="{StaticResource Hairline}" BorderThickness="1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox Grid.Column="0" Name="Composer" Background="Transparent"
+                                     BorderThickness="0" VerticalAlignment="Center"
+                                     Watermark="message this room…" KeyDown="OnComposerKeyDown"
+                                     Text="{Binding SelectedRoom.Draft, Mode=TwoWay}" />
+                            <Button Grid.Column="1" Classes="primary" Margin="5" Content="send"
+                                    Command="{Binding SelectedRoom.SendCommand}" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Panel>
+
+            <!-- right rail: members -->
+            <Border Grid.Column="2" Background="{StaticResource BgBase}"
+                    BorderBrush="{StaticResource Hairline}" BorderThickness="1,0,0,0"
+                    IsVisible="{Binding HasSelection}">
+                <Grid RowDefinitions="Auto,*">
+                    <StackPanel Grid.Row="0" Margin="18,20,18,10" Spacing="3">
+                        <TextBlock Classes="label" Text="MEMBERS" />
+                        <TextBlock Classes="faint" Text="{Binding SelectedRoom.OnlineCount, StringFormat='{}{0} online'}" />
+                    </StackPanel>
+                    <ScrollViewer Grid.Row="1" Padding="10,0,10,12">
+                        <ItemsControl ItemsSource="{Binding SelectedRoom.Members}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MemberViewModel">
+                                    <Border Classes="msgRow" Padding="9,7" CornerRadius="{StaticResource RadiusMd}">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <Ellipse Grid.Column="0" Classes="dot" Classes.online="{Binding Online}"
+                                                     VerticalAlignment="Center" Margin="2,0,11,0" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                                                           Foreground="{Binding NameColorHex, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                                                <Border Classes="accentChip" Padding="6,0" VerticalAlignment="Center"
+                                                        IsVisible="{Binding IsSelf}">
+                                                    <TextBlock Text="you" FontSize="10"
+                                                               Foreground="{StaticResource AccentGlow}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Classes="danger" Content="remove"
+                                                    FontSize="12" IsVisible="{Binding CanRemove}"
+                                                    Command="{Binding RemoveCommand}"
+                                                    ToolTip.Tip="remove from room" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ========================= CONNECT SCREEN ========================= -->
+        <Panel IsVisible="{Binding !IsConnected}" Background="{StaticResource BgBase}">
+            <Ellipse Width="640" Height="640" HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Margin="0,-180,0,0" Opacity="0.18">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Offset="0" Color="{StaticResource AccentColor}" />
+                        <GradientStop Offset="1" Color="#000E0E10" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="22" MaxWidth="420">
+                <StackPanel Orientation="Horizontal" Spacing="14" HorizontalAlignment="Center">
+                    <Ellipse Width="16" Height="16" Fill="{StaticResource Accent}" VerticalAlignment="Center" />
+                    <TextBlock Text="gomp" FontWeight="ExtraBold" FontSize="52" LetterSpacing="-2" />
+                </StackPanel>
+                <TextBlock Classes="muted" TextAlignment="Center" FontSize="15"
+                           Text="Decentralised rooms. Every message signed, every author yours to verify." />
+
+                <Button Classes="primary" HorizontalAlignment="Center" Padding="34,13" FontSize="15"
+                        Command="{Binding ConnectCommand}" IsVisible="{Binding !IsConnecting}"
+                        Content="connect" />
+                <TextBlock Classes="muted" HorizontalAlignment="Center" Text="connecting…"
+                           IsVisible="{Binding IsConnecting}" />
+
+                <Border Background="#2A0E0D" CornerRadius="{StaticResource RadiusSm}" Padding="14,10"
+                        BorderBrush="{StaticResource Danger}" BorderThickness="1" MaxWidth="420"
+                        IsVisible="{Binding ConnectError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Text="{Binding ConnectError}" Foreground="#FF9B96" FontSize="12" />
+                </Border>
+                <TextBlock Classes="faint" TextAlignment="Center" MaxWidth="380"
+                           Text="gomp talks to your local ensemble daemon (ENSEMBLE_SOCKET)." />
+            </StackPanel>
+        </Panel>
+
+        <!-- ========================= JOIN OVERLAY ========================= -->
+        <Panel IsVisible="{Binding IsJoinOpen}" Background="#B0000000">
+            <Border Classes="card" Width="440" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Padding="26">
+                <StackPanel Spacing="16">
+                    <TextBlock Classes="h1" Text="join a room" />
+                    <StackPanel Spacing="7">
+                        <TextBlock Classes="label" Text="ROOM ADDRESS" />
+                        <TextBox FontFamily="{StaticResource FontMono}" FontSize="13"
+                                 Watermark="E…" Text="{Binding JoinAddress, Mode=TwoWay}" />
+                    </StackPanel>
+                    <TextBlock Classes="faint" Foreground="{StaticResource Danger}"
+                               Text="{Binding DialogError}"
+                               IsVisible="{Binding DialogError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                        <Button Classes="ghost" Command="{Binding CancelDialogCommand}" Content="cancel" />
+                        <Button Classes="primary" Command="{Binding ConfirmJoinCommand}"
+                                IsEnabled="{Binding !IsWorking}" Content="join" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Panel>
+
+        <!-- ========================= CREATE OVERLAY ========================= -->
+        <Panel IsVisible="{Binding IsCreateOpen}" Background="#B0000000">
+            <Border Classes="card" Width="460" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Padding="26">
+                <StackPanel Spacing="16">
+                    <TextBlock Classes="h1" Text="create a room" />
+                    <StackPanel Spacing="7">
+                        <TextBlock Classes="label" Text="HOST ADDRESS" />
+                        <TextBox FontFamily="{StaticResource FontMono}" FontSize="13"
+                                 Watermark="the host you have admin rights on (E…)"
+                                 Text="{Binding CreateHost, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Spacing="7">
+                        <TextBlock Classes="label" Text="ROOM NAME" />
+                        <TextBox Watermark="lowercase-slug" Text="{Binding CreateName, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Spacing="7">
+                        <TextBlock Classes="label" Text="WHO CAN JOIN" />
+                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding RoomKinds}"
+                                  SelectedItem="{Binding CreateKind, Mode=TwoWay}" />
+                    </StackPanel>
+                    <TextBlock Classes="faint" Foreground="{StaticResource Danger}"
+                               Text="{Binding DialogError}"
+                               IsVisible="{Binding DialogError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                        <Button Classes="ghost" Command="{Binding CancelDialogCommand}" Content="cancel" />
+                        <Button Classes="primary" Command="{Binding ConfirmCreateCommand}"
+                                IsEnabled="{Binding !IsWorking}" Content="create" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Panel>
+
+    </Grid>
+</Window>

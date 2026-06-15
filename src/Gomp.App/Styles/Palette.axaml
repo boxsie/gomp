@@ -1,0 +1,67 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================
+         gomp palette — Twitch-dark: near-black surfaces, one bold
+         purple accent, green for online, red for forged/danger.
+         ============================================================ -->
+
+    <!-- Fonts (embedded in Assets/Fonts) -->
+    <FontFamily x:Key="FontUi">avares://gomp/Assets/Fonts/#Plus Jakarta Sans</FontFamily>
+    <FontFamily x:Key="FontMono">avares://gomp/Assets/Fonts/#Spline Sans Mono</FontFamily>
+
+    <!-- Surfaces -->
+    <Color x:Key="BgBaseColor">#0E0E10</Color>
+    <Color x:Key="BgSurfaceColor">#161618</Color>
+    <Color x:Key="BgElevatedColor">#1F1F23</Color>
+    <Color x:Key="BgHoverColor">#26262C</Color>
+    <Color x:Key="BgInputColor">#0A0A0B</Color>
+    <Color x:Key="HairlineColor">#2A2A30</Color>
+    <Color x:Key="HairlineSoftColor">#3A3A42</Color>
+
+    <!-- Text -->
+    <Color x:Key="TextPrimaryColor">#EFEFF1</Color>
+    <Color x:Key="TextMutedColor">#ADADB8</Color>
+    <Color x:Key="TextFaintColor">#76767F</Color>
+
+    <!-- Accent (purple) -->
+    <Color x:Key="AccentColor">#9147FF</Color>
+    <Color x:Key="AccentBrightColor">#A970FF</Color>
+    <Color x:Key="AccentDeepColor">#772CE8</Color>
+    <Color x:Key="AccentGlowColor">#BF94FF</Color>
+
+    <!-- Status -->
+    <Color x:Key="OnlineColor">#2DC97E</Color>
+    <Color x:Key="DangerColor">#EB0400</Color>
+    <Color x:Key="WarnColor">#F0B232</Color>
+
+    <!-- Brushes -->
+    <SolidColorBrush x:Key="BgBase" Color="{StaticResource BgBaseColor}" />
+    <SolidColorBrush x:Key="BgSurface" Color="{StaticResource BgSurfaceColor}" />
+    <SolidColorBrush x:Key="BgElevated" Color="{StaticResource BgElevatedColor}" />
+    <SolidColorBrush x:Key="BgHover" Color="{StaticResource BgHoverColor}" />
+    <SolidColorBrush x:Key="BgInput" Color="{StaticResource BgInputColor}" />
+    <SolidColorBrush x:Key="Hairline" Color="{StaticResource HairlineColor}" />
+    <SolidColorBrush x:Key="HairlineSoft" Color="{StaticResource HairlineSoftColor}" />
+
+    <SolidColorBrush x:Key="TextPrimary" Color="{StaticResource TextPrimaryColor}" />
+    <SolidColorBrush x:Key="TextMuted" Color="{StaticResource TextMutedColor}" />
+    <SolidColorBrush x:Key="TextFaint" Color="{StaticResource TextFaintColor}" />
+
+    <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentBright" Color="{StaticResource AccentBrightColor}" />
+    <SolidColorBrush x:Key="AccentDeep" Color="{StaticResource AccentDeepColor}" />
+    <SolidColorBrush x:Key="AccentGlow" Color="{StaticResource AccentGlowColor}" />
+    <SolidColorBrush x:Key="AccentSoft" Color="#2A1A47" />
+
+    <SolidColorBrush x:Key="Online" Color="{StaticResource OnlineColor}" />
+    <SolidColorBrush x:Key="Danger" Color="{StaticResource DangerColor}" />
+    <SolidColorBrush x:Key="Warn" Color="{StaticResource WarnColor}" />
+
+    <!-- Shape -->
+    <CornerRadius x:Key="RadiusSm">6</CornerRadius>
+    <CornerRadius x:Key="RadiusMd">10</CornerRadius>
+    <CornerRadius x:Key="RadiusLg">16</CornerRadius>
+    <CornerRadius x:Key="RadiusPill">999</CornerRadius>
+
+</ResourceDictionary>

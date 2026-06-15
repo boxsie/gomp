@@ -18,6 +18,11 @@ gomp is an Ensemble *app*, not part of the Ensemble platform — it consumes the
   peers — `RoomSession` (the room-ops speaker), `PostSigner`, `MemberDirectory`
   (verify-once + cache), and `GompClient` (join/admin + event routing). Pure
   logic behind a transport seam with fake-transport unit tests; no UI.
+- **`Gomp.App`** (`gomp`) — the desktop **GUI**: an Avalonia app (the launched
+  tier-3 frontend, ADR-0010/0011) on top of `Gomp.Client`. Connect, create a
+  room, join one by address, chat, and see who's around. MVVM with the network
+  behind an `IGompGateway` seam, so the view-models are unit-tested with no
+  daemon.
 - **`Gomp.Protocol`** — the room-ops wire schema (`rooms.proto`), carried as the
   opaque payload of Ensemble's `SERVICE_TRANSPORT_RPC` envelope. Shared between
   the host and the client.
@@ -35,9 +40,9 @@ in-process with no daemon round-trip. The host stores and relays bindings
 verbatim and never verifies them. v1 may run **host-trusted** (sign + distribute
 bindings, skip the verify calls) and flip verification on with zero wire change.
 
-Still to come: the **gomp client GUI** — the Avalonia desktop app a person
-actually clicks around in (the launched tier-3 frontend, ADR-0010/0011), built
-on top of `Gomp.Client`.
+The GUI renders this trust per message: **verified** (green check, unforgeable),
+**unverified** (host-attributed, no badge), or **forged** (red, dimmed — the
+claimed author's signature didn't check out).
 
 ## Layout
 
@@ -45,9 +50,24 @@ on top of `Gomp.Client`.
 src/Gomp.Protocol/    room-ops wire schema (rooms.proto)
 src/Gomp.Host/        the room server (gomp-host) + ensemble-service.yaml package manifest
 src/Gomp.Client/      the client core library (member side; no UI)
+src/Gomp.App/         the Avalonia desktop GUI (assembly: gomp)
+tools/Gomp.Snapshot/  headless Skia render harness — PNGs of the UI without a display
 tests/Gomp.Host.Tests/
 tests/Gomp.Client.Tests/
+tests/Gomp.App.Tests/
 ```
+
+## The app
+
+```bash
+dotnet run --project src/Gomp.App          # talks to your local daemon (ENSEMBLE_SOCKET)
+dotnet run --project tools/Gomp.Snapshot -- /tmp/shots   # render the screens to PNGs
+```
+
+A dark, Twitch-flavoured single window: a left rail of your rooms + identity, the
+chat in the middle with coloured per-member names and trust badges, and the
+member list (with owner-only remove) on the right. The snapshot harness is the
+way to eyeball UI changes on this box (GNOME Wayland blocks screenshot tooling).
 
 ## Build & test
 
