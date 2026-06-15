@@ -26,6 +26,7 @@ message RoomEnvelope {
     SubmitPost      submit        = 1;
     BackfillRequest backfill_req  = 2;
     RosterRequest   roster_req    = 3;
+    Hello           hello         = 4;
 
     // room -> member
     RoomMessage      message      = 10;  // a delivered / fanned-out post
@@ -34,6 +35,29 @@ message RoomEnvelope {
     PresenceUpdate   presence     = 13;
     RoomError        error        = 14;
   }
+}
+
+// First thing a member sends after its connection establishes: it hands the
+// host its identity binding so the host can distribute it to other members via
+// the roster / presence (§5). The host stores and relays these bytes VERBATIM —
+// it never verifies a binding (it has no need; recipients verify). Distributing
+// the binding once lets every member verify a peer ONCE (ML-DSA-65, via the SDK
+// VerifyBinding RPC) and then verify that peer's posts cheaply in-process with
+// the cached ed25519 key — so SignedPost carries only a 64-byte sig, not the
+// ~5KB binding, per message.
+message Hello {
+  IdentityBinding binding = 1;
+}
+
+// A member's rotatable identity binding (a Dilithium-signed token binding its
+// ed25519 operational key to its address — minted by the daemon, returned by
+// the SDK's SignDocumentAsync). Carries the Dilithium pubkey alongside the
+// marshalled binding because the binding bytes do NOT include it, yet the
+// VerifyBinding RPC needs all three (binding + dilithium_pub + address); the
+// address is the member's addr, so it isn't duplicated here.
+message IdentityBinding {
+  bytes binding       = 1;  // marshalled IdentityBinding bytes (the signed token)
+  bytes dilithium_pub = 2;  // PQ identity pubkey — required to verify, not inside `binding`
 }
 
 // A member submits a post to the room. The host verifies the transport
@@ -94,14 +118,23 @@ message Roster {
 }
 
 message Member {
-  string addr   = 1;
-  bool   online = 2;
+  string          addr    = 1;
+  bool            online  = 2;
+  // The member's identity binding, if the host has received its Hello. Empty
+  // until then (or for legacy/host-trusted members): a recipient that holds no
+  // binding for a peer falls back to trusting the host's attribution for that
+  // peer's posts; once the binding arrives it verifies and pins.
+  IdentityBinding binding = 3;
 }
 
 // Pushed to other connected members when a member connects/disconnects (§8).
+// On a join (online=true) the host includes the arriving member's binding once
+// it has the Hello, so peers already in the room can verify-once without
+// re-requesting the whole roster.
 message PresenceUpdate {
-  string addr   = 1;
-  bool   online = 2;
+  string          addr    = 1;
+  bool            online  = 2;
+  IdentityBinding binding = 3;  // set on join once the host holds the member's binding
 }
 
 message RoomError {

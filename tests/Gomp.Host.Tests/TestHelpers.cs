@@ -66,4 +66,18 @@ internal static class Posts
 
     public static byte[] RosterReq() =>
         new RoomEnvelope { RosterReq = new RosterRequest() }.ToByteArray();
+
+    /// <summary>A member's Hello carrying an (opaque-to-the-host) identity binding.</summary>
+    public static byte[] Hello(string bindingTag = "binding") =>
+        new RoomEnvelope
+        {
+            Hello = new Hello
+            {
+                Binding = new IdentityBinding
+                {
+                    Binding = ByteString.CopyFromUtf8(bindingTag),
+                    DilithiumPub = ByteString.CopyFromUtf8("dpub"),
+                },
+            },
+        }.ToByteArray();
 }

@@ -21,6 +21,10 @@ internal sealed class Room
     private readonly ILogger _log;
     private readonly object _gate = new();
     private readonly HashSet<string> _online = new(StringComparer.Ordinal);
+    // Per-member identity binding, learned from each member's Hello. Stored and
+    // relayed VERBATIM — the host never verifies a binding (recipients do); it
+    // is just the distribution vehicle so peers can verify-once + pin (§6).
+    private readonly Dictionary<string, IdentityBinding> _bindings = new(StringComparer.Ordinal);
 
     public string Name { get; }
     public RoomKind Kind { get; }
@@ -68,6 +72,9 @@ internal sealed class Room
         lock (_gate)
         {
             if (!_online.Remove(addr)) return;
+            // Drop the binding too: a reconnect re-announces via Hello (and the
+            // member may have rotated its key), so we never relay a stale one.
+            _bindings.Remove(addr);
             others = _online.ToList();
         }
         await PushPresenceAsync(others, addr, online: false).ConfigureAwait(false);
@@ -99,6 +106,9 @@ internal sealed class Room
                 break;
             case RoomEnvelope.BodyOneofCase.RosterReq:
                 await SendAsync(from, new RoomEnvelope { Roster = BuildRoster() }).ConfigureAwait(false);
+                break;
+            case RoomEnvelope.BodyOneofCase.Hello:
+                await HandleHelloAsync(from, env.Hello).ConfigureAwait(false);
                 break;
             default:
                 // room->member variants arriving from a member, or unset — ignore.
@@ -160,6 +170,35 @@ internal sealed class Room
         return SendAsync(from, new RoomEnvelope { BackfillResp = resp });
     }
 
+    /// <summary>A member handed us its identity binding (§6): stash it (verbatim,
+    /// unverified) and push it to everyone already in the room via a presence
+    /// update so they can verify-once. Future joiners pick it up from the roster.</summary>
+    private async Task HandleHelloAsync(string from, Hello hello)
+    {
+        if (hello.Binding is null || hello.Binding.Binding.IsEmpty)
+        {
+            await ReplyErrorAsync(from, "bad_hello", "hello carried no binding").ConfigureAwait(false);
+            return;
+        }
+
+        List<string> others;
+        lock (_gate)
+        {
+            // Ignore a Hello from a connection we don't consider online (mid-teardown).
+            if (!_online.Contains(from)) return;
+            _bindings[from] = hello.Binding;
+            others = _online.Where(a => a != from).ToList();
+        }
+
+        var env = new RoomEnvelope
+        {
+            Presence = new PresenceUpdate { Addr = from, Online = true, Binding = hello.Binding },
+        };
+        var bytes = env.ToByteArray();
+        foreach (var member in others)
+            await SendRawAsync(member, bytes).ConfigureAwait(false);
+    }
+
     // ---- membership (driven by admin ops on the host) ----
 
     /// <summary>Grant a member address on the room's live allowlist (invite rooms).</summary>
@@ -183,7 +222,12 @@ internal sealed class Room
         lock (_gate)
         {
             foreach (var a in _online)
-                roster.Members.Add(new Member { Addr = a, Online = true });
+            {
+                var member = new Member { Addr = a, Online = true };
+                if (_bindings.TryGetValue(a, out var binding))
+                    member.Binding = binding;
+                roster.Members.Add(member);
+            }
         }
         return roster;
     }

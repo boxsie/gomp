@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Gomp.Client/Gomp.Client.csproj" />
     <Project Path="src/Gomp.Host/Gomp.Host.csproj" />
     <Project Path="src/Gomp.Protocol/Gomp.Protocol.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Gomp.Client.Tests/Gomp.Client.Tests.csproj" />
     <Project Path="tests/Gomp.Host.Tests/Gomp.Host.Tests.csproj" />
   </Folder>
 </Solution>

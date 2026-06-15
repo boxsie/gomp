@@ -1,3 +1,4 @@
+using Google.Protobuf;
 using Microsoft.Extensions.Logging.Abstractions;
 using Gomp.Host;
 using Gomp.Protocol;
@@ -131,6 +132,72 @@ public sealed class RoomTests
         var resp = Assert.Single(tx.EnvelopesTo("A"), e => e.BodyCase == RoomEnvelope.BodyOneofCase.BackfillResp);
         Assert.Equal(2, resp.BackfillResp.Messages.Count);
         Assert.True(resp.BackfillResp.Complete);
+    }
+
+    [Fact]
+    public async Task Hello_DistributesBinding_ToOthersViaPresence()
+    {
+        var (room, tx) = NewRoom();
+        await room.OnConnectionEstablishedAsync("A");
+        await room.OnConnectionEstablishedAsync("B");
+        tx.Sent.Clear();
+
+        await room.OnRpcMessageAsync("B", Posts.Hello("B-binding"));
+
+        // A (already present) gets B's binding via a presence(online) update.
+        var pres = Assert.Single(tx.EnvelopesTo("A"), e => e.BodyCase == RoomEnvelope.BodyOneofCase.Presence);
+        Assert.Equal("B", pres.Presence.Addr);
+        Assert.True(pres.Presence.Online);
+        Assert.Equal("B-binding", pres.Presence.Binding.Binding.ToStringUtf8());
+        // The host does not echo it back to the sender.
+        Assert.Empty(tx.EnvelopesTo("B"));
+    }
+
+    [Fact]
+    public async Task Hello_Binding_AppearsInRosterForFutureJoiners()
+    {
+        var (room, tx) = NewRoom();
+        await room.OnConnectionEstablishedAsync("A");
+        await room.OnRpcMessageAsync("A", Posts.Hello("A-binding"));
+        tx.Sent.Clear();
+
+        // B joins after A has announced its binding → B's roster snapshot carries it.
+        await room.OnConnectionEstablishedAsync("B");
+
+        var roster = Assert.Single(tx.EnvelopesTo("B"), e => e.BodyCase == RoomEnvelope.BodyOneofCase.Roster);
+        var a = Assert.Single(roster.Roster.Members, m => m.Addr == "A");
+        Assert.Equal("A-binding", a.Binding.Binding.ToStringUtf8());
+    }
+
+    [Fact]
+    public async Task Hello_EmptyBinding_Rejected()
+    {
+        var (room, tx) = NewRoom();
+        await room.OnConnectionEstablishedAsync("A");
+        tx.Sent.Clear();
+
+        await room.OnRpcMessageAsync("A", new RoomEnvelope { Hello = new Hello() }.ToByteArray());
+
+        var err = Assert.Single(tx.EnvelopesTo("A"), e => e.BodyCase == RoomEnvelope.BodyOneofCase.Error);
+        Assert.Equal("bad_hello", err.Error.Code);
+    }
+
+    [Fact]
+    public async Task Leave_DropsBinding_FromRoster()
+    {
+        var (room, tx) = NewRoom();
+        await room.OnConnectionEstablishedAsync("A");
+        await room.OnRpcMessageAsync("A", Posts.Hello("A-binding"));
+        await room.OnConnectionClosedAsync("A");
+        await room.OnConnectionEstablishedAsync("A");
+        tx.Sent.Clear();
+
+        // After a reconnect (no fresh Hello yet), the roster carries no stale binding.
+        await room.OnRpcMessageAsync("A", Posts.RosterReq());
+
+        var roster = Assert.Single(tx.EnvelopesTo("A"), e => e.BodyCase == RoomEnvelope.BodyOneofCase.Roster);
+        var a = Assert.Single(roster.Roster.Members, m => m.Addr == "A");
+        Assert.True(a.Binding is null || a.Binding.Binding.IsEmpty);
     }
 
     [Fact]
