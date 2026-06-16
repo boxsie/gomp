@@ -20,7 +20,7 @@
 name: gomp
 version: 0.1.0
 description: >-
-  Host-led group rooms (ADR-0007): create, join and chat in small,
+  Host-led group rooms: create, join and chat in small,
   self-hostable rooms with history backfill and presence.
 
 entrypoint:
