@@ -83,20 +83,11 @@ dotnet test  Gomp.slnx
 
 ### SDK dependency
 
-gomp depends on `Ensemble.Client`: the host on **2.2.0** (the `FromEnv` +
-spawn-token surface) and the client on **2.3.0** (which adds the identity-document
-kit — `SignDocumentAsync` / `VerifyBindingAsync` / `VerifyPostSignature` — that
-the authorship scheme above is built on). Until those are published to nuget.org
-they're consumed from a **local feed** (`nuget.config` → `local-packages/`).
-Refresh it from an ensemble checkout:
-
-```bash
-dotnet pack ../ensemble/clients/dotnet/Ensemble.Client/Ensemble.Client.csproj \
-  -c Release -o local-packages
-```
-
-Once `Ensemble.Client` is on nuget.org, drop the local source from
-`nuget.config`.
+gomp depends on **`Ensemble.Client` 2.3.0** (from nuget.org): the `FromEnv` +
+spawn-token surface the host runs on, plus the identity-document kit —
+`SignDocumentAsync` / `VerifyBindingAsync` / `VerifyPostSignature` — the
+verifiable-authorship scheme above is built on. Plain `dotnet restore` pulls it;
+no local feed.
 
 ## Running a host
 
@@ -105,6 +96,31 @@ spawn contract in the environment (`ENSEMBLE_SOCKET` / `ENSEMBLE_SERVICE_NAME` /
 `ENSEMBLE_SERVICE_TOKEN` / `ENSEMBLE_DATA_DIR`), plus `ROOM_HOST_OWNER` (the
 operator E-address with admin authority) and optional `ROOM_HISTORY_MAX`. It is
 installed as the `rooms` service package (`src/Gomp.Host/ensemble-service.yaml`).
+
+### Defining rooms headlessly
+
+A host with no frontend defines its rooms by config, not by a live command
+channel: drop a `rooms.yaml` into the service data dir (`$ENSEMBLE_DATA_DIR/rooms.yaml`)
+and start. On boot the host reconciles its catalog from it.
+
+```yaml
+rooms:
+  - name: lobby
+    kind: open            # open | friends | invite
+  - name: mates
+    kind: friends
+  - name: vip
+    kind: invite
+    members: [Ealice, Ebob]
+```
+
+Semantics are **ensure-exists**: config only ever *adds* — a declared room that
+doesn't exist is created; new `members` on an existing invite room are added.
+Config **never** deletes a room or changes its kind, so editing the file can't
+nuke a room with history, and rooms created live (by an admin client) coexist
+with config-defined ones. Because the data dir is keyed by service *name*, the
+catalog survives upgrades, rollbacks and restarts. A malformed `rooms.yaml` is
+logged and skipped — existing rooms are unaffected.
 
 ### At-rest data
 

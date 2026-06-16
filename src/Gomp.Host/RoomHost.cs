@@ -78,6 +78,25 @@ internal sealed class RoomHost : IAsyncDisposable
         _log.LogInformation("room host {Name} base identity {Addr} registered; owner {Owner}",
             _hostName, _baseSvc.ServiceAddress, _admin.Owner);
 
+        // Headless room definition: reconcile the catalog from the operator's
+        // data/rooms.yaml BEFORE (re)registering, so config-defined rooms flow
+        // through the same registration pass below. Ensure-exists — a bad config
+        // must never strand rooms that already exist in the catalog.
+        try
+        {
+            var result = RoomConfig.Reconcile(RoomConfig.Load(_dataDir), _catalog);
+            foreach (var name in result.Created)
+                _log.LogInformation("rooms-from-config: created room {Room}", name);
+            foreach (var m in result.MembersAdded)
+                _log.LogInformation("rooms-from-config: added member {Member}", m);
+            foreach (var s in result.Skipped)
+                _log.LogWarning("rooms-from-config: skipped {Detail}", s);
+        }
+        catch (RoomConfigException ex)
+        {
+            _log.LogError("rooms-from-config: {Message}; existing rooms unaffected", ex.Message);
+        }
+
         foreach (var rec in _catalog.All())
         {
             try
