@@ -1,0 +1,50 @@
+# gomp — Ensemble service package manifest (ADR-0009 §2 / ADR-0007).
+#
+# Lives at the REPO ROOT: the publish pipeline (serves
+# ensemble-service-publish.yaml) and the .NET bundle Job both read it from here,
+# and the build Job ships a copy into the bundle's release root.
+#
+# v1 is the headless room HOST: a daemon-supervised backend that registers a
+# base identity plus one sub-identity per room. `sub_identities: true` is the
+# consent-relevant capability that authorizes minting `<gomp>/<room>` identities
+# at runtime. The capability ceiling is the WIDEST a room may be: `acl: public`
+# so the host can mint open rooms (PUBLIC); invite (ALLOWLIST), friends
+# (CONTACTS) and the base identity (ALLOWLIST) all fit under it (ADR-0007 §2
+# ceiling inheritance).
+#
+# `frontend: none` = pure backend, installable headless. This SAME service grows
+# to `frontend: launched_client` (adding a `client:` block for the Avalonia gomp
+# app) later — a consent-gated capability growth that keeps the service name, so
+# the name-keyed data dir (rooms, history, admins) survives the upgrade.
+
+name: gomp
+version: 0.1.0
+description: >-
+  Host-led group rooms (ADR-0007): create, join and chat in small,
+  self-hostable rooms with history backfill and presence.
+
+entrypoint:
+  command: ["gomp-host"]
+
+# No `runtime.requires`: the bundle is a self-contained .NET publish (the runtime
+# is bundled), so the target node needs nothing installed — not even dotnet.
+
+capabilities:
+  frontend: none
+  transport: rpc
+  acl: public
+  sub_identities: true
+  max_payload_bytes: 131072
+
+settings:
+  - key: ROOM_HOST_OWNER
+    label: Owner address
+    description: The operator E-address with full admin authority over this host and its rooms.
+    type: address
+    required: true
+  - key: ROOM_HISTORY_MAX
+    label: Per-room history limit
+    description: Maximum messages retained per room before the oldest are dropped (backfill window).
+    type: int
+    default: "1000"
+    min: 1

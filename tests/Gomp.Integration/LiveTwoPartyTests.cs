@@ -90,7 +90,7 @@ public sealed class LiveTwoPartyTests
             var hostClient = new EnsembleClient(dHost.Endpoint, loggerFactory.CreateLogger<EnsembleClient>());
             disposables.Push(hostClient);
             var hostDataDir = Directory.CreateTempSubdirectory("gomp-host-").FullName;
-            var host = new RoomHost(hostClient, "rooms", hostDataDir, aAddr, 1000, loggerFactory);
+            var host = new RoomHost(hostClient, "gomp", hostDataDir, aAddr, 1000, loggerFactory);
             disposables.Push(host);
             await host.StartAsync();
             var hostBase = host.BaseAddress!;

@@ -95,7 +95,7 @@ no local feed.
 spawn contract in the environment (`ENSEMBLE_SOCKET` / `ENSEMBLE_SERVICE_NAME` /
 `ENSEMBLE_SERVICE_TOKEN` / `ENSEMBLE_DATA_DIR`), plus `ROOM_HOST_OWNER` (the
 operator E-address with admin authority) and optional `ROOM_HISTORY_MAX`. It is
-installed as the `rooms` service package (`src/Gomp.Host/ensemble-service.yaml`).
+installed as the `gomp` service package (`ensemble-service.yaml` at the repo root).
 
 ### Defining rooms headlessly
 

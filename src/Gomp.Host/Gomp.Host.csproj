@@ -28,10 +28,4 @@
     <InternalsVisibleTo Include="Gomp.Integration" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- The package manifest sits at the release root next to the published
-         binary so `entrypoint.command` resolves (ADR-0009). -->
-    <Content Include="ensemble-service.yaml" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
 </Project>
