@@ -28,6 +28,13 @@
               GrpcServices="None"
               ProtoRoot="proto"
               Link="proto\rooms.proto" />
+    <!-- gomp's private frontend<->backend relay schema (ADR-0011 §5). Imports
+         rooms.proto for RoomKind; rides the daemon launched-client relay as
+         opaque bytes, never parsed by the daemon. -->
+    <Protobuf Include="proto\gateway.proto"
+              GrpcServices="None"
+              ProtoRoot="proto"
+              Link="proto\gateway.proto" />
   </ItemGroup>
 
 </Project>

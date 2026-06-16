@@ -1,0 +1,180 @@
+syntax = "proto3";
+
+package ensemble.gomp.gateway.v1;
+
+option csharp_namespace = "Gomp.Protocol.Gateway";
+
+import "rooms.proto";
+
+// gomp's INTERNAL frontend <-> backend protocol (ADR-0011 §5). These messages
+// are the opaque app bytes of the daemon's launched-client relay: the launched
+// Avalonia frontend serializes a FeRequest and sends it over its AttachService
+// stream (it arrives at the backend as an `operator_message` event); the
+// backend serializes a BeEvent and replies via ServiceToOperator (it arrives at
+// the frontend's onPayload). The daemon never parses these bytes — this schema
+// is private to gomp, distinct from the room-ops wire schema (rooms.proto) the
+// backend speaks to peers.
+//
+// The frontend is a pure consumer: it holds no identity, registers no service,
+// makes no network calls. Every room-op and admin-op it wants is a FeRequest;
+// every post / roster / result it sees is a BeEvent its backend relayed. The
+// member identity, post signing, room hosting and peer transport all live in
+// the backend.
+
+// ---- frontend -> backend (operator_message) ----------------------------
+
+message FeRequest {
+  oneof body {
+    JoinRoom   join      = 1;
+    LeaveRoom  leave     = 2;
+    SendChat   send_chat = 3;
+    Roster     roster    = 4;  // request a fresh roster snapshot
+    Backfill   backfill  = 5;  // fetch history before a cursor
+    AdminOp    admin     = 6;  // create/list/close/add/remove/promote/demote
+  }
+}
+
+message JoinRoom {
+  string room_address    = 1;
+  bool   request_history = 2;  // pull backfill on join
+}
+
+message LeaveRoom {
+  string room_address = 1;
+}
+
+message SendChat {
+  string room_address = 1;
+  string text         = 2;  // UTF-8 chat content
+}
+
+message Roster {
+  string room_address = 1;
+}
+
+message Backfill {
+  string room_address = 1;
+  int64  since_seq    = 2;  // 0 = from the earliest the host still holds
+}
+
+// An admin operation against a host base identity. `host_base` empty (or equal
+// to the backend's own base address) means "host it here" — the backend runs
+// the op against its own RoomHost instead of dialing out. Otherwise the backend
+// dials `host_base` as a member and relays the host's response. `request_id` is
+// frontend-minted and echoed back in the matching AdminResult.
+message AdminOp {
+  string request_id = 1;
+  string host_base  = 2;
+  oneof op {
+    CreateRoom   create  = 3;
+    ListRooms    list    = 4;
+    CloseRoom    close   = 5;
+    AddMember    add     = 6;
+    RemoveMember remove  = 7;
+    PromoteAdmin promote = 8;
+    DemoteAdmin  demote  = 9;
+  }
+}
+
+message CreateRoom {
+  string                    name    = 1;
+  ensemble.rooms.v1.RoomKind kind   = 2;
+  repeated string           members = 3;  // initial allowlist (invite rooms)
+}
+
+message ListRooms {}
+
+message CloseRoom {
+  string name = 1;
+}
+
+message AddMember {
+  string room = 1;
+  string addr = 2;
+}
+
+message RemoveMember {
+  string room = 1;
+  string addr = 2;
+}
+
+message PromoteAdmin {
+  string addr = 1;
+}
+
+message DemoteAdmin {
+  string addr = 1;
+}
+
+// ---- backend -> frontend (ServiceToOperator) ---------------------------
+
+message BeEvent {
+  oneof body {
+    Welcome     welcome      = 1;  // first event after attach: the backend's self address
+    Post        post         = 2;  // a delivered / backfilled post for a joined room
+    Presence    presence     = 3;  // a member came online / went offline
+    RosterSnap  roster       = 4;  // full roster for a room (join or on request)
+    RoomError   room_error   = 5;  // a room reported an error
+    AdminResult admin_result = 6;  // outcome of an AdminOp, correlated by request_id
+  }
+}
+
+// The backend's member E-address, pushed once the relay is attached so the
+// frontend can render "you" without an extra round-trip.
+message Welcome {
+  string self_address = 1;
+}
+
+// Authorship trust for a delivered post (mirrors Gomp.Client.PostTrust). The
+// zero value is UNVERIFIED so an unset field reads as "trust the host's word."
+enum PostTrust {
+  POST_TRUST_UNVERIFIED = 0;
+  POST_TRUST_VERIFIED   = 1;
+  POST_TRUST_FORGED     = 2;
+}
+
+message Post {
+  string    room_address = 1;
+  int64     seq          = 2;
+  int64     host_ts      = 3;
+  string    sender       = 4;
+  bytes     content      = 5;  // chat text bytes
+  int64     client_ts    = 6;
+  string    nonce        = 7;
+  PostTrust trust        = 8;
+}
+
+message Presence {
+  string room_address = 1;
+  string addr         = 2;
+  bool   online       = 3;
+}
+
+message RosterSnap {
+  string                room_address = 1;
+  repeated RosterMember members      = 2;
+}
+
+message RosterMember {
+  string addr   = 1;
+  bool   online = 2;
+}
+
+message RoomError {
+  string room_address = 1;
+  string code         = 2;
+  string message      = 3;
+}
+
+message AdminResult {
+  string               request_id = 1;
+  bool                 ok         = 2;
+  string               error      = 3;
+  repeated RoomSummary rooms      = 4;
+}
+
+message RoomSummary {
+  string                     name = 1;
+  string                     addr = 2;
+  ensemble.rooms.v1.RoomKind kind = 3;
+}

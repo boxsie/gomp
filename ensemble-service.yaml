@@ -4,21 +4,24 @@
 # ensemble-service-publish.yaml) and the .NET bundle Job both read it from here,
 # and the build Job ships a copy into the bundle's release root.
 #
-# v1 is the headless room HOST: a daemon-supervised backend that registers a
-# base identity plus one sub-identity per room. `sub_identities: true` is the
-# consent-relevant capability that authorizes minting `<gomp>/<room>` identities
-# at runtime. The capability ceiling is the WIDEST a room may be: `acl: public`
-# so the host can mint open rooms (PUBLIC); invite (ALLOWLIST), friends
-# (CONTACTS) and the base identity (ALLOWLIST) all fit under it (ADR-0007 §2
-# ceiling inheritance).
+# gomp is a daemon-supervised backend that registers a base identity plus one
+# sub-identity per room. `sub_identities: true` is the consent-relevant
+# capability that authorizes minting `<gomp>/<room>` identities at runtime. The
+# capability ceiling is the WIDEST a room may be: `acl: public` so the host can
+# mint open rooms (PUBLIC); invite (ALLOWLIST), friends (CONTACTS) and the base
+# identity (ALLOWLIST) all fit under it (ADR-0007 §2 ceiling inheritance).
 #
-# `frontend: none` = pure backend, installable headless. This SAME service grows
-# to `frontend: launched_client` (adding a `client:` block for the Avalonia gomp
-# app) later — a consent-gated capability growth that keeps the service name, so
-# the name-keyed data dir (rooms, history, admins) survives the upgrade.
+# `frontend: launched_client` makes this a TIER-3 app: the SAME supervised
+# backend (`entrypoint`) both hosts pubs AND, when the operator opens it, launches
+# the Avalonia frontend (`client.command`) which relays through the backend over
+# the daemon's launched-client relay (ADR-0011 §5). The frontend is a CEILING,
+# not a requirement — a headless install declines it (`--headless`, 09769ccb) and
+# gets the pure room host, byte-for-byte as before. Growing from a prior
+# `frontend: none` install is a consent-gated capability growth that keeps the
+# service name, so the name-keyed data dir (rooms, history, admins) survives.
 
 name: gomp
-version: 0.1.0
+version: 0.2.0
 description: >-
   Host-led group rooms: create, join and chat in small,
   self-hostable rooms with history backfill and presence.
@@ -26,11 +29,19 @@ description: >-
 entrypoint:
   command: ["gomp-host"]
 
-# No `runtime.requires`: the bundle is a self-contained .NET publish (the runtime
-# is bundled), so the target node needs nothing installed — not even dotnet.
+# The launched desktop frontend (the Avalonia gomp app). It publishes into the
+# bundle's `client/` subdir beside the backend at the root (two-apphost layout,
+# c5eaf696); the launcher fires it with the spawn contract + a scoped launch
+# grant and the daemon relays its traffic to the backend (ADR-0011 §5).
+client:
+  command: ["client/gomp"]
+
+# No `runtime.requires` on either binary: the bundle is a self-contained .NET
+# publish (the runtime is bundled), so the target node needs nothing installed —
+# not even dotnet.
 
 capabilities:
-  frontend: none
+  frontend: launched_client
   transport: rpc
   acl: public
   sub_identities: true

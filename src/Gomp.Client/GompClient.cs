@@ -60,6 +60,14 @@ public sealed class GompClient : IAsyncDisposable
     /// <summary>The member's own E-address.</summary>
     public string Address => _tx.Address;
 
+    /// <summary>
+    /// Whether this client currently holds a live <see cref="RoomSession"/> for
+    /// <paramref name="addr"/>. The unified backend uses this to disambiguate
+    /// inbound traffic on a shared base identity: a payload from a joined room is
+    /// a room post (route to the member); anything else is host-admin traffic.
+    /// </summary>
+    internal bool IsJoinedRoom(string addr) => _rooms.ContainsKey(addr);
+
     // ---- own identity binding (signed once, reused across rooms) ----
 
     /// <summary>

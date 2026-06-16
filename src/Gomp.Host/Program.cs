@@ -12,7 +12,7 @@ using Gomp.Host;
 using var loggerFactory = LoggerFactory.Create(b => b
     .AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; })
     .SetMinimumLevel(LogLevel.Information));
-var log = loggerFactory.CreateLogger("ensemble-room-host");
+var log = loggerFactory.CreateLogger("gomp-backend");
 
 var ctx = SpawnContext.FromEnv();
 if (string.IsNullOrEmpty(ctx.SocketPath) || string.IsNullOrEmpty(ctx.ServiceName) || string.IsNullOrEmpty(ctx.DataDir))
@@ -38,19 +38,22 @@ using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, c => { c
 using var sigint = PosixSignalRegistration.Create(PosixSignal.SIGINT, c => { c.Cancel = true; shutdown.Cancel(); });
 
 await using var client = EnsembleClient.FromEnv(loggerFactory.CreateLogger<EnsembleClient>());
-await using var host = new RoomHost(client, ctx.ServiceName, ctx.DataDir, owner, historyMax, loggerFactory);
+// The unified backend: a daemon-supervised host that also embeds the member core
+// and serves a launched Avalonia frontend over the operator relay (ADR-0011 §5).
+// With no frontend attached it behaves exactly like the v1 headless room host.
+await using var backend = new GompBackend(client, ctx.ServiceName, ctx.DataDir, owner, historyMax, loggerFactory);
 
 try
 {
-    await host.StartAsync(shutdown.Token);
+    await backend.StartAsync(shutdown.Token);
 }
 catch (Exception ex)
 {
-    log.LogError(ex, "room host failed to start");
+    log.LogError(ex, "gomp backend failed to start");
     return 1;
 }
 
-log.LogInformation("room host running; base address {Addr}", host.BaseAddress);
+log.LogInformation("gomp backend running; base address {Addr}", backend.BaseAddress);
 
 try
 {
@@ -61,5 +64,5 @@ catch (OperationCanceledException)
     // expected on SIGTERM/SIGINT
 }
 
-log.LogInformation("room host shutting down");
+log.LogInformation("gomp backend shutting down");
 return 0;

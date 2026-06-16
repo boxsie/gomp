@@ -15,7 +15,7 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var vm = new MainWindowViewModel(new LiveGompGatewayFactory(), new AvaloniaUiDispatcher());
+            var vm = new MainWindowViewModel(new RelayGompGatewayFactory(), new AvaloniaUiDispatcher());
             desktop.MainWindow = new MainWindow { DataContext = vm };
             desktop.ShutdownRequested += async (_, _) => await vm.DisposeAsync();
         }

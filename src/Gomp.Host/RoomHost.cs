@@ -31,6 +31,7 @@ internal sealed class RoomHost : IAsyncDisposable
     private readonly Dictionary<string, RoomHandle> _rooms = new(StringComparer.Ordinal);
 
     private RegisteredService? _baseSvc;
+    private bool _ownsBase; // true: we registered the base and must dispose it; false: attached to a shared base
 
     private sealed record RoomHandle(Room Room, RegisteredService Service);
 
@@ -56,32 +57,64 @@ internal sealed class RoomHost : IAsyncDisposable
     public string? BaseAddress => _baseSvc?.ServiceAddress;
 
     /// <summary>
-    /// Register the base identity (ALLOWLIST-gated to the owner + admins) and
-    /// re-register every room from the persisted catalog so a restart restores
-    /// the same rooms at the same addresses.
+    /// The base-identity manifest: ALLOWLIST-gated to the owner + admins, RPC
+    /// transport, sub-identity minting authorized. Built here because the
+    /// authorized set comes from <see cref="AdminState"/>; the unified backend
+    /// registers the base itself (with its combined handler) and so needs this.
     /// </summary>
-    public async Task StartAsync(CancellationToken ct = default)
-    {
-        var manifest = ServiceManifest.NewBuilder(_hostName)
+    internal ServiceManifest BuildBaseManifest() =>
+        ServiceManifest.NewBuilder(_hostName)
             .Description("Ensemble room host (ADR-0007)")
             .Transport(ServiceTransport.Rpc)
             .Acl(ServiceAcl.Allowlist, _admin.AuthorizedAddresses().ToArray())
             .MaxPayloadBytes(BaseMaxPayload)
             .Build();
 
+    /// <summary>
+    /// Standalone host: register the base identity ourselves (its event stream
+    /// carries only admin traffic) and restore the persisted rooms. This is the
+    /// headless-host path and the integration harness's host node.
+    /// </summary>
+    public async Task StartAsync(CancellationToken ct = default)
+    {
         _baseSvc = await _client.RegisterServiceAsync(
-            manifest,
+            BuildBaseManifest(),
             HandleBaseEventAsync,
             OnBaseErrorAsync,
             ct).ConfigureAwait(false);
+        _ownsBase = true;
 
         _log.LogInformation("room host {Name} base identity {Addr} registered; owner {Owner}",
             _hostName, _baseSvc.ServiceAddress, _admin.Owner);
 
-        // Headless room definition: reconcile the catalog from the operator's
-        // data/rooms.yaml BEFORE (re)registering, so config-defined rooms flow
-        // through the same registration pass below. Ensure-exists — a bad config
-        // must never strand rooms that already exist in the catalog.
+        await InitRoomsAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Unified backend: adopt a base identity the orchestrator already registered
+    /// (its combined handler routes admin events here, and member + operator
+    /// traffic elsewhere on the same stream — ADR-0011 §5). We don't own the
+    /// registration or its handler; we only use the service for admin replies,
+    /// allowlist mutations, and sub-identity minting, then restore the rooms.
+    /// </summary>
+    internal async Task AttachAsync(RegisteredService baseSvc, CancellationToken ct = default)
+    {
+        _baseSvc = baseSvc;
+        _ownsBase = false;
+        _log.LogInformation("room host {Name} attached to base identity {Addr}; owner {Owner}",
+            _hostName, baseSvc.ServiceAddress, _admin.Owner);
+        await InitRoomsAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reconcile the catalog from the operator's <c>data/rooms.yaml</c> then
+    /// (re)register every catalogued room so a restart restores the same rooms at
+    /// the same addresses. Shared by both entry paths.
+    /// </summary>
+    private async Task InitRoomsAsync(CancellationToken ct)
+    {
+        // Ensure-exists — a bad config must never strand rooms that already exist
+        // in the catalog.
         try
         {
             var result = RoomConfig.Reconcile(RoomConfig.Load(_dataDir), _catalog);
@@ -113,7 +146,13 @@ internal sealed class RoomHost : IAsyncDisposable
 
     // ---- base identity: admin operations ----
 
-    private async ValueTask HandleBaseEventAsync(ServiceEvent ev)
+    /// <summary>
+    /// Handle one event on the base identity. In standalone mode this is the
+    /// registered handler; in the unified backend the orchestrator's combined
+    /// handler calls it for the events it has classified as host-admin requests
+    /// (a remote admin dialing in). Non-RpcMessage events are no-ops here.
+    /// </summary>
+    internal async ValueTask HandleBaseEventAsync(ServiceEvent ev)
     {
         if (ev is not ServiceEvent.RpcMessage msg)
             return; // connection_established/closed on the base identity need no action
@@ -155,6 +194,15 @@ internal sealed class RoomHost : IAsyncDisposable
 
         await SendBaseAsync(msg.FromAddr, new AdminEnvelope { Response = resp }).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Execute an admin op against THIS host, returning the response without
+    /// sending it. The standalone path wraps this with an authority check + reply
+    /// (<see cref="HandleBaseEventAsync"/>); the unified backend calls it directly
+    /// for the local operator's "host here" ops (the operator door is privileged
+    /// by construction — ADR-0011 §5 — so no from_addr authority check applies).
+    /// </summary>
+    internal Task<AdminResponse> ExecuteAdminAsync(AdminRequest req) => DispatchAdminAsync(req);
 
     private async Task<AdminResponse> DispatchAdminAsync(AdminRequest req)
     {
@@ -414,7 +462,9 @@ internal sealed class RoomHost : IAsyncDisposable
         {
             _roomsLock.Release();
         }
-        if (_baseSvc is not null)
+        // Only dispose the base if we registered it; in the unified backend the
+        // shared base belongs to GompBackend, which disposes it after us.
+        if (_ownsBase && _baseSvc is not null)
             await _baseSvc.DisposeAsync().ConfigureAwait(false);
         _roomsLock.Dispose();
     }

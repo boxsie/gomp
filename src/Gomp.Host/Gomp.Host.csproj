@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Ensemble.Client" Version="2.3.0" />
+    <PackageReference Include="Ensemble.Client" Version="2.5.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.1" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
@@ -21,6 +21,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Gomp.Protocol\Gomp.Protocol.csproj" />
+    <!-- The unified backend (GompBackend) embeds the member core (GompClient)
+         alongside the room host, so one supervised process can both host pubs
+         and join others' over a single base identity (ADR-0011 §5 / 65e99655). -->
+    <ProjectReference Include="..\Gomp.Client\Gomp.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

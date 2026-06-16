@@ -14,7 +14,7 @@
     <!-- The client owns message signing + peer verification, so it needs the
          2.3.0 identity-document kit (SignDocumentAsync / VerifyBindingAsync /
          VerifyPostSignature). The host pins 2.2.0; the client needs 2.3.0. -->
-    <PackageReference Include="Ensemble.Client" Version="2.3.0" />
+    <PackageReference Include="Ensemble.Client" Version="2.5.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +24,11 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Gomp.Client.Tests" />
     <InternalsVisibleTo Include="Gomp.Integration" />
+    <!-- The unified backend composes the member core over a shared base identity
+         (ADR-0011 §5 / 65e99655): it needs the internal IRoomClientTransport seam
+         and GompClient's internal transport ctor. NB: the Gomp.Host project's
+         assembly name is "gomp-host" (the launched binary), so reference that. -->
+    <InternalsVisibleTo Include="gomp-host" />
   </ItemGroup>
 
 </Project>
