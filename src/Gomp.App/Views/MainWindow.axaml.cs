@@ -1,9 +1,11 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Gomp.App.ViewModels;
 
 namespace Gomp.App.Views;
@@ -91,5 +93,28 @@ public partial class MainWindow : Window
         {
             await clipboard.SetTextAsync(addr);
         }
+    }
+
+    // Click a member row to copy their full address (handy for invites / contacts).
+    private async void OnCopyMember(object? sender, PointerPressedEventArgs e)
+    {
+        // A click on the row's remove button isn't a copy.
+        if (e.Source is Visual v && v.FindAncestorOfType<Button>() is not null)
+            return;
+        if (sender is Control { DataContext: MemberViewModel m })
+            await CopyAsync(m.Address);
+    }
+
+    // Click a chat message to copy its text (system lines aren't copyable).
+    private async void OnCopyMessage(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: MessageViewModel { IsSystem: false } m })
+            await CopyAsync(m.Content);
+    }
+
+    private async Task CopyAsync(string text)
+    {
+        if (!string.IsNullOrEmpty(text) && GetTopLevel(this)?.Clipboard is { } clipboard)
+            await clipboard.SetTextAsync(text);
     }
 }

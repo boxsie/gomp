@@ -57,7 +57,8 @@ internal static class Program
         Dispatcher.UIThread.RunJobs();
         if (scrollEnd && window.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "ManageScroll") is { } sv)
         {
-            sv.ScrollToEnd();
+            Dispatcher.UIThread.RunJobs(); // settle layout so Extent/Viewport are real
+            sv.Offset = new Vector(sv.Offset.X, Math.Max(0, sv.Extent.Height - sv.Viewport.Height));
             Dispatcher.UIThread.RunJobs();
         }
         var frame = window.CaptureRenderedFrame();

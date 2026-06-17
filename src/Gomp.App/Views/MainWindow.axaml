@@ -154,10 +154,11 @@
                                             <TextBlock Text="{Binding Content}" Classes="faint"
                                                        TextAlignment="Center" />
                                         </Border>
-                                        <!-- message line -->
+                                        <!-- message line (click to copy its text) -->
                                         <Border IsVisible="{Binding !IsSystem}" Classes="msgRow"
                                                 Padding="8,4" CornerRadius="{StaticResource RadiusSm}"
-                                                Opacity="{Binding RowOpacity}">
+                                                Opacity="{Binding RowOpacity}" Cursor="Hand"
+                                                PointerPressed="OnCopyMessage" ToolTip.Tip="click to copy message">
                                             <Grid ColumnDefinitions="Auto,*">
                                                 <TextBlock Grid.Column="0" Classes="mono faint" Text="{Binding TimeText}"
                                                            VerticalAlignment="Top" Margin="0,2,10,0" />
@@ -214,7 +215,9 @@
                         <ItemsControl ItemsSource="{Binding SelectedRoom.Members}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:MemberViewModel">
-                                    <Border Classes="msgRow" Padding="9,7" CornerRadius="{StaticResource RadiusMd}">
+                                    <Border Classes="msgRow" Padding="9,7" CornerRadius="{StaticResource RadiusMd}"
+                                            Cursor="Hand" PointerPressed="OnCopyMember"
+                                            ToolTip.Tip="click to copy address">
                                         <Grid ColumnDefinitions="Auto,*,Auto">
                                             <Ellipse Grid.Column="0" Classes="dot" Classes.online="{Binding Online}"
                                                      VerticalAlignment="Center" Margin="2,0,11,0" />
@@ -380,7 +383,9 @@
                     </Grid>
 
                     <!-- middle: scrollable body fills the space between header and footer -->
-                    <ScrollViewer Name="ManageScroll" Padding="26,8,20,16" VerticalScrollBarVisibility="Auto"
+                    <!-- Bottom padding ≈ the footer's height: even if the body extends
+                         under the footer, the last row always scrolls clear of it. -->
+                    <ScrollViewer Name="ManageScroll" Padding="26,8,20,72" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <!-- Fixed content width so wrapping text and right-aligned buttons
                              stay clear of the scrollbar (the card is a fixed 560). -->
