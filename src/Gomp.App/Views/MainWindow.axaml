@@ -373,7 +373,8 @@
                                 Command="{Binding DoneCommand}" Content="✕" />
                     </Grid>
 
-                    <!-- footer: status + done (docked bottom; declared before the fill child) -->
+                    <!-- footer: status + done (docked bottom; declared before the fill
+                         child so the ScrollViewer fills exactly the gap above it) -->
                     <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="26,8,22,22">
                         <TextBlock Classes="faint" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                    Text="{Binding Status}" Foreground="{StaticResource AccentGlow}"
@@ -382,14 +383,18 @@
                                 Command="{Binding DoneCommand}" />
                     </Grid>
 
-                    <!-- middle: scrollable body fills the space between header and footer -->
-                    <!-- Bottom padding ≈ the footer's height: even if the body extends
-                         under the footer, the last row always scrolls clear of it. -->
-                    <ScrollViewer Name="ManageScroll" Padding="26,8,20,72" VerticalScrollBarVisibility="Auto"
+                    <!-- middle: scrollable body fills the space between header and footer.
+                         The body's insets live on the inner StackPanel's Margin (NOT the
+                         ScrollViewer's Padding): a ScrollViewer doesn't count its own bottom
+                         Padding in the scroll extent, so as Padding the last rows (danger
+                         zone) could never scroll into view. As content Margin they're in
+                         the extent and fully reachable. -->
+                    <ScrollViewer Name="ManageScroll" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <!-- Fixed content width so wrapping text and right-aligned buttons
                              stay clear of the scrollbar (the card is a fixed 560). -->
-                        <StackPanel Spacing="22" Width="492" HorizontalAlignment="Left">
+                        <StackPanel Spacing="22" Width="492" HorizontalAlignment="Left"
+                                    Margin="26,8,20,28">
 
                             <!-- address -->
                             <StackPanel Spacing="7">

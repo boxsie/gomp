@@ -21,7 +21,7 @@
 # service name, so the name-keyed data dir (rooms, history, admins) survives.
 
 name: gomp
-version: 0.3.4
+version: 0.3.5
 description: >-
   Host-led group rooms: create, join and chat in small,
   self-hostable rooms with history backfill and presence.
