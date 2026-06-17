@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Gomp.App.Services;
 using Gomp.App.ViewModels;
 using Gomp.Client;
@@ -30,8 +32,11 @@ internal static class Program
         Render(BuildConnect(), Path.Combine(outDir, "01-connect.png"));
         Render(BuildRoom(), Path.Combine(outDir, "02-room.png"));
         Render(BuildManage(), Path.Combine(outDir, "03-manage.png"));
-        // Short window: proves the docked footer never lets the body bleed under it.
-        Render(BuildManage(), Path.Combine(outDir, "03b-manage-short.png"), 580);
+        // Short window, scrolled to the BOTTOM: the exact state of Dan's screenshot —
+        // proves the danger zone clears the docked footer instead of bleeding under it.
+        Render(BuildManage(), Path.Combine(outDir, "03b-manage-bottom.png"), 580, scrollEnd: true);
+        // Tall window: ALL content fits, no scroll — isolates structure from scroll extent.
+        Render(BuildManage(), Path.Combine(outDir, "03c-manage-tall.png"), 1000);
         Console.WriteLine("snapshots written to " + Path.GetFullPath(outDir));
     }
 
@@ -45,11 +50,16 @@ internal static class Program
         return vm;
     }
 
-    private static void Render(MainWindowViewModel vm, string path, int height = H)
+    private static void Render(MainWindowViewModel vm, string path, int height = H, bool scrollEnd = false)
     {
         var window = new Gomp.App.Views.MainWindow { DataContext = vm, Width = W, Height = height };
         window.Show();
         Dispatcher.UIThread.RunJobs();
+        if (scrollEnd && window.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "ManageScroll") is { } sv)
+        {
+            sv.ScrollToEnd();
+            Dispatcher.UIThread.RunJobs();
+        }
         var frame = window.CaptureRenderedFrame();
         frame?.Save(path);
         window.Close();

@@ -380,7 +380,7 @@
                     </Grid>
 
                     <!-- middle: scrollable body fills the space between header and footer -->
-                    <ScrollViewer Padding="26,8,20,8" VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer Name="ManageScroll" Padding="26,8,20,16" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <!-- Fixed content width so wrapping text and right-aligned buttons
                              stay clear of the scrollbar (the card is a fixed 560). -->
