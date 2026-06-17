@@ -1,0 +1,56 @@
+name: release
+
+# Public release build on GitHub-hosted runners (no homelab CI involved).
+# Produces the two-apphost Ensemble service bundle: the supervised backend
+# (gomp-host) at the root and the launched Avalonia frontend (client/gomp)
+# beside it, with ensemble-service.yaml at the bundle root — the exact layout
+# the daemon expects to install (ADR-0009 / ADR-0011 §5).
+#
+# Cut a release:  git tag v0.3.5 && git push github v0.3.5
+# (keep the tag in step with `version:` in ensemble-service.yaml).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. v0.3.5)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Self-contained publish: the bundle carries its own .NET runtime, so the
+      # target node needs nothing installed (matches the manifest's note).
+      - name: Publish backend + frontend (self-contained linux-x64)
+        run: |
+          dotnet publish src/Gomp.Host -c Release -r linux-x64 --self-contained true -o bundle
+          dotnet publish src/Gomp.App  -c Release -r linux-x64 --self-contained true -o bundle/client
+          cp ensemble-service.yaml bundle/
+
+      - name: Package
+        run: |
+          VERSION="${TAG#v}"
+          DIR="gomp-${VERSION}-linux-x64"
+          mv bundle "$DIR"
+          tar -czf "${DIR}.tar.gz" "$DIR"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" gomp-*-linux-x64.tar.gz \
+            --title "$TAG" --target "$GITHUB_SHA" --generate-notes
