@@ -9,6 +9,24 @@ public sealed class RoomStoreTests
     private static string TempDir() => Directory.CreateTempSubdirectory("roomstore").FullName;
 
     [Fact]
+    public void Delete_RemovesRoomDirectory()
+    {
+        var dir = TempDir();
+        var store = RoomStore.Open(dir, "snug", 100);
+        store.Append(Posts.Make("a", "snug", "hi"), 1);
+        var roomDir = Path.Combine(dir, "rooms", "snug");
+        Assert.True(Directory.Exists(roomDir));
+
+        RoomStore.Delete(dir, "snug");
+
+        Assert.False(Directory.Exists(roomDir));
+        // Other rooms under the same data dir are untouched.
+        RoomStore.Open(dir, "other", 100);
+        RoomStore.Delete(dir, "snug"); // idempotent: no throw when already gone
+        Assert.True(Directory.Exists(Path.Combine(dir, "rooms", "other")));
+    }
+
+    [Fact]
     public void Append_AssignsMonotonicSeq()
     {
         var store = RoomStore.Open(TempDir(), "r", 100);

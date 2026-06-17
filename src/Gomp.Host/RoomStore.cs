@@ -57,6 +57,18 @@ internal sealed class RoomStore
         return store;
     }
 
+    /// <summary>
+    /// Delete a room's on-disk history tree (<c>rooms/&lt;name&gt;</c> under
+    /// <paramref name="dataDir"/>). Called when a room is closed so a torn-down
+    /// room leaves no residue behind. No-op if the directory is already gone.
+    /// </summary>
+    public static void Delete(string dataDir, string name)
+    {
+        var dir = Path.Combine(dataDir, "rooms", name);
+        if (Directory.Exists(dir))
+            Directory.Delete(dir, recursive: true);
+    }
+
     private void Load()
     {
         if (!File.Exists(_path)) return;

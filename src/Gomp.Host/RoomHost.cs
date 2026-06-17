@@ -271,6 +271,19 @@ internal sealed class RoomHost : IAsyncDisposable
                 return Fail(reqId, "no_such_room");
 
             _catalog.Remove(name);
+
+            // Drop the room's on-disk history so a closed room leaves no
+            // residue. Best-effort: the room is already torn down, so a
+            // leftover directory must not fail the close.
+            try
+            {
+                RoomStore.Delete(_dataDir, name);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "closed room {Room} but couldn't delete its history dir", name);
+            }
+
             _log.LogInformation("closed room {Room}", name);
             return Ok(reqId);
         }
