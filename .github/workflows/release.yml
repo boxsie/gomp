@@ -44,7 +44,9 @@ jobs:
       - name: Package
         run: |
           VERSION="${TAG#v}"
-          DIR="gomp-${VERSION}-linux-x64"
+          # amd64 (not the .NET RID "x64") so the artifact name matches the
+          # ensemble registry's platform key (linux-amd64) for installs.
+          DIR="gomp-${VERSION}-linux-amd64"
           mv bundle "$DIR"
           tar -czf "${DIR}.tar.gz" "$DIR"
 
@@ -52,5 +54,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$TAG" gomp-*-linux-x64.tar.gz \
+          gh release create "$TAG" gomp-*-linux-amd64.tar.gz \
             --title "$TAG" --target "$GITHUB_SHA" --generate-notes
