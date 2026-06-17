@@ -205,10 +205,19 @@ internal sealed class GompBackend : IAsyncDisposable
     {
         if (_member is not { } mem) return;
 
-        await _joinedLock.WaitAsync().ConfigureAwait(false);
-        var already = _joined.ContainsKey(j.RoomAddress);
-        _joinedLock.Release();
-        if (already) return; // idempotent
+        // The backend outlives the launched frontend (it's daemon-supervised; only
+        // the Avalonia UI relaunches). A relaunched UI re-joins rooms the member is
+        // already in — don't silently no-op, or the fresh UI sits empty (no roster,
+        // no history) until the user sends a message. Replay current state over the
+        // live session so it repopulates. SendToOperator targets whatever frontend
+        // is attached now, so the existing observer routes to the new UI fine.
+        var existing = await SessionFor(j.RoomAddress).ConfigureAwait(false);
+        if (existing is not null)
+        {
+            await existing.RequestRosterAsync().ConfigureAwait(false);
+            if (j.RequestHistory) await existing.BackfillAsync(0).ConfigureAwait(false);
+            return;
+        }
 
         var observer = new RelayRoomObserver(j.RoomAddress, SendToFeAsync);
         try

@@ -355,10 +355,13 @@
             <Border Classes="card" Width="560" MaxHeight="760" Margin="0,28"
                     VerticalAlignment="Stretch" HorizontalAlignment="Center" Padding="0"
                     DataContext="{Binding Manage}" x:DataType="vm:ManageRoomViewModel">
-                <Grid RowDefinitions="Auto,*,Auto">
+                <!-- DockPanel (not a Grid star row): docks header/footer and lets the
+                     ScrollViewer fill exactly the gap, so the body can never bleed
+                     under the fixed footer. -->
+                <DockPanel LastChildFill="True">
 
                     <!-- header -->
-                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="26,24,22,8">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="26,24,22,8">
                         <StackPanel>
                             <TextBlock Classes="h1" Text="{Binding Title}" />
                             <TextBlock Classes="faint" Text="manage room" />
@@ -367,7 +370,17 @@
                                 Command="{Binding DoneCommand}" Content="✕" />
                     </Grid>
 
-                    <ScrollViewer Grid.Row="1" Padding="26,8,20,8" VerticalScrollBarVisibility="Auto"
+                    <!-- footer: status + done (docked bottom; declared before the fill child) -->
+                    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="26,8,22,22">
+                        <TextBlock Classes="faint" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   Text="{Binding Status}" Foreground="{StaticResource AccentGlow}"
+                                   IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <Button Grid.Column="1" Classes="primary" Content="done"
+                                Command="{Binding DoneCommand}" />
+                    </Grid>
+
+                    <!-- middle: scrollable body fills the space between header and footer -->
+                    <ScrollViewer Padding="26,8,20,8" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <!-- Fixed content width so wrapping text and right-aligned buttons
                              stay clear of the scrollbar (the card is a fixed 560). -->
@@ -504,16 +517,7 @@
 
                         </StackPanel>
                     </ScrollViewer>
-
-                    <!-- footer: status + done -->
-                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="26,8,22,22">
-                        <TextBlock Classes="faint" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                   Text="{Binding Status}" Foreground="{StaticResource AccentGlow}"
-                                   IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                        <Button Grid.Column="1" Classes="primary" Content="done"
-                                Command="{Binding DoneCommand}" />
-                    </Grid>
-                </Grid>
+                </DockPanel>
             </Border>
         </Panel>
 

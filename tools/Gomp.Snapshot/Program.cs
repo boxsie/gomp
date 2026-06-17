@@ -30,6 +30,8 @@ internal static class Program
         Render(BuildConnect(), Path.Combine(outDir, "01-connect.png"));
         Render(BuildRoom(), Path.Combine(outDir, "02-room.png"));
         Render(BuildManage(), Path.Combine(outDir, "03-manage.png"));
+        // Short window: proves the docked footer never lets the body bleed under it.
+        Render(BuildManage(), Path.Combine(outDir, "03b-manage-short.png"), 580);
         Console.WriteLine("snapshots written to " + Path.GetFullPath(outDir));
     }
 
@@ -43,9 +45,9 @@ internal static class Program
         return vm;
     }
 
-    private static void Render(MainWindowViewModel vm, string path)
+    private static void Render(MainWindowViewModel vm, string path, int height = H)
     {
-        var window = new Gomp.App.Views.MainWindow { DataContext = vm, Width = W, Height = H };
+        var window = new Gomp.App.Views.MainWindow { DataContext = vm, Width = W, Height = height };
         window.Show();
         Dispatcher.UIThread.RunJobs();
         var frame = window.CaptureRenderedFrame();
