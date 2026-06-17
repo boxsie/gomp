@@ -88,7 +88,6 @@ internal static class Program
     private static void Create(MainWindowViewModel vm, string name, RoomKind kind)
     {
         vm.ShowCreateCommand.Execute(null);
-        vm.CreateHost = "EhostAdminXyz";
         vm.CreateName = name;
         vm.CreateKind = kind;
         vm.ConfirmCreateCommand.Execute(null);

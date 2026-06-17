@@ -87,9 +87,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private string _joinAddress = "";
 
     [ObservableProperty]
-    private string _createHost = "";
-
-    [ObservableProperty]
     private string _createName = "";
 
     [ObservableProperty]
@@ -117,7 +114,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void ShowCreate()
     {
         DialogError = null;
-        CreateHost = "";
         CreateName = "";
         CreateKind = RoomKind.Open;
         IsJoinOpen = false;
@@ -162,15 +158,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ConfirmCreateAsync()
     {
-        var host = CreateHost.Trim();
         var name = CreateName.Trim();
-        if (string.IsNullOrEmpty(host) || string.IsNullOrEmpty(name))
+        if (string.IsNullOrEmpty(name))
         {
-            DialogError = "a host address and a room name, please";
+            DialogError = "a room name, please";
             return;
         }
         if (_gateway is null)
             return;
+
+        // The room is always created on THIS app's own backend host — the owner
+        // and host identity were settled on the Ensemble side (ROOM_HOST_OWNER).
+        // There is no separate "host address" to ask for: it is our own self
+        // address from the daemon's Welcome, which the backend routes locally.
+        var host = SelfAddress;
+        if (string.IsNullOrEmpty(host))
+        {
+            DialogError = "not connected to a host yet";
+            return;
+        }
 
         IsWorking = true;
         DialogError = null;

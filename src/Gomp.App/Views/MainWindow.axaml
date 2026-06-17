@@ -302,12 +302,7 @@
                     Padding="26">
                 <StackPanel Spacing="16">
                     <TextBlock Classes="h1" Text="create a room" />
-                    <StackPanel Spacing="7">
-                        <TextBlock Classes="label" Text="HOST ADDRESS" />
-                        <TextBox FontFamily="{StaticResource FontMono}" FontSize="13"
-                                 Watermark="the host you have admin rights on (E…)"
-                                 Text="{Binding CreateHost, Mode=TwoWay}" />
-                    </StackPanel>
+                    <TextBlock Classes="faint" Text="{Binding ShortSelf, StringFormat='hosting on {0}'}" />
                     <StackPanel Spacing="7">
                         <TextBlock Classes="label" Text="ROOM NAME" />
                         <TextBox Watermark="lowercase-slug" Text="{Binding CreateName, Mode=TwoWay}" />

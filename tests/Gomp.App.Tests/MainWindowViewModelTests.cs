@@ -102,7 +102,6 @@ public sealed class MainWindowViewModelTests
         await vm.ConnectCommand.ExecuteAsync(null);
 
         vm.ShowCreateCommand.Execute(null);
-        vm.CreateHost = "Ehost";
         vm.CreateName = "snug";
         vm.CreateKind = RoomKind.Invite;
         await vm.ConfirmCreateCommand.ExecuteAsync(null);
@@ -126,7 +125,6 @@ public sealed class MainWindowViewModelTests
         await vm.ConnectCommand.ExecuteAsync(null);
 
         vm.ShowCreateCommand.Execute(null);
-        vm.CreateHost = "Ehost";
         vm.CreateName = "snug";
         await vm.ConfirmCreateCommand.ExecuteAsync(null);
 
@@ -144,7 +142,6 @@ public sealed class MainWindowViewModelTests
         await vm.ConnectCommand.ExecuteAsync(null);
 
         vm.ShowCreateCommand.Execute(null);
-        vm.CreateHost = "Ehost";
         vm.CreateName = "snug";
         vm.CreateKind = RoomKind.Invite;
         await vm.ConfirmCreateCommand.ExecuteAsync(null);
@@ -156,7 +153,7 @@ public sealed class MainWindowViewModelTests
         await peer.RemoveCommand.ExecuteAsync(null);
 
         var call = Assert.Single(gw.Removed);
-        Assert.Equal(("Ehost", "snug", "Epeer"), call);
+        Assert.Equal(("Eself", "snug", "Epeer"), call);
         Assert.Contains(room.Messages, m => m.IsSystem && m.Content.Contains("removed"));
     }
 
