@@ -65,6 +65,7 @@ internal sealed class FakeGateway : IGompGateway, IGompGatewayFactory
 
     public List<FakeRoomHandle> Joined { get; } = new();
     public List<string> Left { get; } = new();
+    public List<(string Host, string Room)> Closed { get; } = new();
     public List<(string Host, string Room, string Addr)> Removed { get; } = new();
 
     public Func<string, string, RoomKind, AdminResult>? OnCreate { get; set; }
@@ -103,8 +104,13 @@ internal sealed class FakeGateway : IGompGateway, IGompGatewayFactory
     public Task<AdminResult> ListRoomsAsync(string hostBase, CancellationToken ct = default)
         => Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
 
+    public AdminResult CloseResult { get; set; } = new(true, null, Array.Empty<RoomSummary>());
+
     public Task<AdminResult> CloseRoomAsync(string hostBase, string name, CancellationToken ct = default)
-        => Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    {
+        Closed.Add((hostBase, name));
+        return Task.FromResult(CloseResult);
+    }
 
     public Task<AdminResult> AddMemberAsync(string hostBase, string room, string addr, CancellationToken ct = default)
         => Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));

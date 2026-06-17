@@ -324,5 +324,24 @@
             </Border>
         </Panel>
 
+        <!-- ===================== LEAVE / CLOSE CONFIRM (owner) ===================== -->
+        <Panel IsVisible="{Binding IsLeaveConfirmOpen}" Background="#B0000000">
+            <Border Classes="card" Width="460" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Padding="26">
+                <StackPanel Spacing="16">
+                    <TextBlock Classes="h1" Text="{Binding LeaveRoomTitle, StringFormat='leave {0}?'}" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               Text="You host this room. Leave it running headless, or close it to tear it down and free its address, history and listener — closing can't be undone." />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                        <Button Classes="ghost" Command="{Binding CancelLeaveCommand}" Content="cancel" />
+                        <Button Classes="ghost" Command="{Binding ConfirmLeaveKeepHostingCommand}"
+                                Content="leave (keep hosting)" />
+                        <Button Classes="danger" Command="{Binding ConfirmCloseRoomCommand}"
+                                Content="close room" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Panel>
+
     </Grid>
 </Window>

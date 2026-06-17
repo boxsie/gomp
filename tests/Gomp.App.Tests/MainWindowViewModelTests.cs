@@ -133,6 +133,83 @@ public sealed class MainWindowViewModelTests
         Assert.Empty(vm.Rooms);
     }
 
+    private static async Task<(MainWindowViewModel vm, RoomViewModel room)> OwnedRoom(FakeGateway gw)
+    {
+        gw.OnCreate = (_, name, kind) => new AdminResult(true, null, new[] { new RoomSummary(name, "Eroom-new", kind) });
+        var vm = New(gw);
+        await vm.ConnectCommand.ExecuteAsync(null);
+        vm.ShowCreateCommand.Execute(null);
+        vm.CreateName = "snug";
+        vm.CreateKind = RoomKind.Invite;
+        await vm.ConfirmCreateCommand.ExecuteAsync(null);
+        return (vm, vm.SelectedRoom!);
+    }
+
+    [Fact]
+    public async Task OwnerLeave_OpensConfirm_WithoutDetachingOrClosing()
+    {
+        var gw = new FakeGateway();
+        var (vm, room) = await OwnedRoom(gw);
+        Assert.True(room.IsOwner);
+
+        await room.LeaveCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsLeaveConfirmOpen);
+        Assert.Equal("snug", vm.LeaveRoomTitle);
+        Assert.Single(vm.Rooms);          // still here — nothing happened yet
+        Assert.Empty(gw.Left);
+        Assert.Empty(gw.Closed);
+    }
+
+    [Fact]
+    public async Task OwnerLeave_Close_TearsDownAndRemoves()
+    {
+        var gw = new FakeGateway();
+        var (vm, room) = await OwnedRoom(gw);
+
+        await room.LeaveCommand.ExecuteAsync(null);
+        await vm.ConfirmCloseRoomCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsLeaveConfirmOpen);
+        Assert.Equal(("Eself", "snug"), Assert.Single(gw.Closed));
+        Assert.Empty(gw.Left);            // close, not detach
+        Assert.Empty(vm.Rooms);
+    }
+
+    [Fact]
+    public async Task OwnerLeave_KeepHosting_DetachesButDoesNotClose()
+    {
+        var gw = new FakeGateway();
+        var (vm, room) = await OwnedRoom(gw);
+
+        await room.LeaveCommand.ExecuteAsync(null);
+        await vm.ConfirmLeaveKeepHostingCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsLeaveConfirmOpen);
+        Assert.Equal(room.Address, Assert.Single(gw.Left));
+        Assert.Empty(gw.Closed);
+        Assert.Empty(vm.Rooms);
+    }
+
+    [Fact]
+    public async Task MemberLeave_DetachesImmediately_NoPrompt()
+    {
+        var gw = new FakeGateway();
+        var vm = New(gw);
+        await vm.ConnectCommand.ExecuteAsync(null);
+        vm.JoinAddress = "Eroom-x";
+        await vm.ConfirmJoinCommand.ExecuteAsync(null);
+        var room = vm.SelectedRoom!;
+        Assert.False(room.IsOwner);
+
+        await room.LeaveCommand.ExecuteAsync(null);
+
+        Assert.False(vm.IsLeaveConfirmOpen);
+        Assert.Equal("Eroom-x", Assert.Single(gw.Left));
+        Assert.Empty(gw.Closed);
+        Assert.Empty(vm.Rooms);
+    }
+
     [Fact]
     public async Task Remove_CallsGateway_AndPostsSystemNotice()
     {

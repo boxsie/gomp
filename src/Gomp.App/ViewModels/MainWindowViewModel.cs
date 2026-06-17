@@ -98,6 +98,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string? _dialogError;
 
+    // ---- leave-vs-close confirm (owner only) ----
+
+    [ObservableProperty]
+    private bool _isLeaveConfirmOpen;
+
+    [ObservableProperty]
+    private string? _leaveRoomTitle;
+
+    private RoomViewModel? _leaveTarget;
+
     public IReadOnlyList<RoomKind> RoomKinds { get; } =
         new[] { RoomKind.Open, RoomKind.Friends, RoomKind.Invite };
 
@@ -232,16 +242,79 @@ public sealed partial class MainWindowViewModel : ObservableObject
         SelectedRoom = room;
     }
 
-    private async Task LeaveRoomAsync(RoomViewModel room)
+    private Task LeaveRoomAsync(RoomViewModel room)
+    {
+        // Leaving a room you HOST is ambiguous: detach (keep hosting it
+        // headless) vs close (tear the sub-identity down and free its onion,
+        // DHT announce, listener and on-disk history). Prompt so a self-host
+        // owner never silently leaks a room. A non-owned room just detaches.
+        if (room.IsOwner)
+        {
+            _leaveTarget = room;
+            LeaveRoomTitle = room.Title;
+            IsLeaveConfirmOpen = true;
+            return Task.CompletedTask;
+        }
+
+        return DetachRoomAsync(room);
+    }
+
+    // Drop the local member session and remove the card; the room keeps
+    // running on the host. This is the only thing "leave" ever did.
+    private async Task DetachRoomAsync(RoomViewModel room)
     {
         if (_gateway is not null)
             await _gateway.LeaveAsync(room.Address).ConfigureAwait(true);
+        RemoveRoomCard(room);
+    }
 
+    private void RemoveRoomCard(RoomViewModel room)
+    {
         var wasSelected = ReferenceEquals(SelectedRoom, room);
         Rooms.Remove(room);
         OnPropertyChanged(nameof(HasRooms));
         if (wasSelected)
             SelectedRoom = Rooms.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private async Task ConfirmLeaveKeepHosting()
+    {
+        var room = _leaveTarget;
+        CloseLeaveConfirm();
+        if (room is not null)
+            await DetachRoomAsync(room).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task ConfirmCloseRoom()
+    {
+        var room = _leaveTarget;
+        CloseLeaveConfirm();
+        if (room is null || _gateway is null || room.Admin is null)
+            return;
+
+        // CloseRoom is the admin op that actually tears the room down on the
+        // host: disposes the sub-identity service (onion/listener/DHT/allowlist)
+        // and removes it from the catalog so it doesn't come back on restart.
+        var res = await _gateway.CloseRoomAsync(room.Admin.HostBase, room.Admin.RoomName)
+            .ConfigureAwait(true);
+        if (!res.Ok)
+        {
+            room.AddSystem($"couldn't close the room: {res.Error}");
+            return;
+        }
+        RemoveRoomCard(room);
+    }
+
+    [RelayCommand]
+    private void CancelLeave() => CloseLeaveConfirm();
+
+    private void CloseLeaveConfirm()
+    {
+        IsLeaveConfirmOpen = false;
+        LeaveRoomTitle = null;
+        _leaveTarget = null;
     }
 
     private async Task RemoveMemberAsync(RoomViewModel room, MemberViewModel member)
