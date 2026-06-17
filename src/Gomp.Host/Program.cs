@@ -6,8 +6,10 @@ using Gomp.Host;
 // Ensemble room host (ADR-0007 / ADR-0009): a daemon-supervised service. The
 // supervisor execs this binary with the spawn contract in the environment
 // (ENSEMBLE_SOCKET / ENSEMBLE_SERVICE_NAME / ENSEMBLE_SERVICE_TOKEN /
-// ENSEMBLE_DATA_DIR) and the owner via the per-service env overlay
-// (ROOM_HOST_OWNER). Optional ROOM_HISTORY_MAX caps per-room retention.
+// ENSEMBLE_DATA_DIR). The host OWNS its rooms under its own base account (option
+// B, ticket a5fbf64b); ROOM_HOST_OWNER names an INITIAL delegated admin (the
+// node account by default) that may drive admin remotely. Optional
+// ROOM_HISTORY_MAX caps per-room retention.
 
 using var loggerFactory = LoggerFactory.Create(b => b
     .AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; })
@@ -21,10 +23,10 @@ if (string.IsNullOrEmpty(ctx.SocketPath) || string.IsNullOrEmpty(ctx.ServiceName
     return 1;
 }
 
-var owner = Environment.GetEnvironmentVariable("ROOM_HOST_OWNER");
-if (string.IsNullOrWhiteSpace(owner))
+var seedAdmin = Environment.GetEnvironmentVariable("ROOM_HOST_OWNER");
+if (string.IsNullOrWhiteSpace(seedAdmin))
 {
-    log.LogError("ROOM_HOST_OWNER is required (the operator address with admin authority)");
+    log.LogError("ROOM_HOST_OWNER is required (the initial admin delegated authority over this host)");
     return 1;
 }
 
@@ -41,7 +43,7 @@ await using var client = EnsembleClient.FromEnv(loggerFactory.CreateLogger<Ensem
 // The unified backend: a daemon-supervised host that also embeds the member core
 // and serves a launched Avalonia frontend over the operator relay (ADR-0011 §5).
 // With no frontend attached it behaves exactly like the v1 headless room host.
-await using var backend = new GompBackend(client, ctx.ServiceName, ctx.DataDir, owner, historyMax, loggerFactory);
+await using var backend = new GompBackend(client, ctx.ServiceName, ctx.DataDir, seedAdmin, historyMax, loggerFactory);
 
 try
 {

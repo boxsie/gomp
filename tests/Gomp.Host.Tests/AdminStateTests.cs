@@ -8,32 +8,40 @@ public sealed class AdminStateTests
     private static string TempDir() => Directory.CreateTempSubdirectory("admin").FullName;
 
     [Fact]
-    public void Owner_IsAlwaysAuthorized()
+    public void OwnerAndSeedAdmin_AreAuthorized()
     {
-        var s = AdminState.Load(TempDir(), "Eowner");
-        Assert.True(s.IsAuthorized("Eowner"));
+        var s = AdminState.Load(TempDir(), "Eseed");
+        s.SetOwner("Ebase");                          // gomp's own base account (option B)
+        Assert.True(s.IsAuthorized("Ebase"));         // the owner
+        Assert.True(s.IsAuthorized("Eseed"));         // the env-delegated admin
         Assert.False(s.IsAuthorized("Estranger"));
-        Assert.Contains("Eowner", s.AuthorizedAddresses());
+        // The base manifest allowlist is the dial-in set: the env seed, NOT the
+        // owner (a service is never in its own allowlist).
+        Assert.Contains("Eseed", s.RemoteAdminAddresses());
+        Assert.DoesNotContain("Ebase", s.RemoteAdminAddresses());
     }
 
     [Fact]
     public void Promote_AddsAdmin_AndPersists()
     {
         var dir = TempDir();
-        var s = AdminState.Load(dir, "Eowner");
+        var s = AdminState.Load(dir, "Eseed");
         Assert.True(s.Promote("Ealice"));
         Assert.True(s.IsAuthorized("Ealice"));
+        Assert.Contains("Ealice", s.RemoteAdminAddresses());
 
         // A fresh load (restart) sees the persisted admin.
-        var reloaded = AdminState.Load(dir, "Eowner");
+        var reloaded = AdminState.Load(dir, "Eseed");
         Assert.True(reloaded.IsAuthorized("Ealice"));
     }
 
     [Fact]
-    public void Promote_OwnerOrDuplicate_IsNoOp()
+    public void Promote_AuthorityOrDuplicate_IsNoOp()
     {
-        var s = AdminState.Load(TempDir(), "Eowner");
-        Assert.False(s.Promote("Eowner"));     // owner is authority by role
+        var s = AdminState.Load(TempDir(), "Eseed");
+        s.SetOwner("Ebase");
+        Assert.False(s.Promote("Ebase"));      // owner is authority by role
+        Assert.False(s.Promote("Eseed"));      // env seed is authority by env
         Assert.True(s.Promote("Ealice"));
         Assert.False(s.Promote("Ealice"));     // already admin
     }
@@ -42,46 +50,61 @@ public sealed class AdminStateTests
     public void Demote_RemovesAdmin()
     {
         var dir = TempDir();
-        var s = AdminState.Load(dir, "Eowner");
+        var s = AdminState.Load(dir, "Eseed");
         s.Promote("Ealice");
         Assert.True(s.Demote("Ealice"));
         Assert.False(s.IsAuthorized("Ealice"));
         Assert.False(s.Demote("Ealice"));      // not an admin anymore
+        Assert.False(s.Demote("Eseed"));       // env seed can't be demoted
 
-        var reloaded = AdminState.Load(dir, "Eowner");
+        var reloaded = AdminState.Load(dir, "Eseed");
         Assert.False(reloaded.IsAuthorized("Ealice"));
     }
 
     [Fact]
-    public void OwnerRotation_NotOverriddenByStaleAdminFile()
+    public void SeedAdmin_NeverPersists_AcrossReload()
     {
         var dir = TempDir();
-        var s = AdminState.Load(dir, "Eowner1");
-        s.Promote("Eowner2");
+        var s = AdminState.Load(dir, "Eseed1");
+        s.Promote("Ealice");   // a real promoted admin persists; the env seed does not
 
-        // Reload with a different owner. Eowner2 was persisted as an admin AND is
-        // now the owner — it's dropped from the admin set on load but stays
-        // authorized by being the owner. Eowner1 was the OLD owner, which never
-        // persisted (owner is always re-read from env), so after rotation it has
-        // no leftover authority.
-        var rotated = AdminState.Load(dir, "Eowner2");
-        Assert.Equal("Eowner2", rotated.Owner);
-        Assert.True(rotated.IsAuthorized("Eowner2"));
-        Assert.False(rotated.IsAuthorized("Eowner1"));
+        // Reload with a rotated env seed: the old seed has no lingering authority,
+        // the promoted admin survives, the new seed is authorized.
+        var reloaded = AdminState.Load(dir, "Eseed2");
+        Assert.True(reloaded.IsAuthorized("Ealice"));    // persisted admin survives
+        Assert.True(reloaded.IsAuthorized("Eseed2"));    // new env seed
+        Assert.False(reloaded.IsAuthorized("Eseed1"));   // old seed gone (never persisted)
     }
 
     [Fact]
-    public void CorruptFile_StartsWithOwnerOnly()
+    public void Owner_RotatesFreely_NotPersisted()
+    {
+        var dir = TempDir();
+        var s = AdminState.Load(dir, "Eseed");
+        s.SetOwner("Ebase1");
+        Assert.Equal("Ebase1", s.Owner);
+
+        // The owner is the base service address — re-derived at registration each
+        // boot, never persisted; a fresh load binds whatever address it's given.
+        var reloaded = AdminState.Load(dir, "Eseed");
+        reloaded.SetOwner("Ebase2");
+        Assert.Equal("Ebase2", reloaded.Owner);
+        Assert.True(reloaded.IsAuthorized("Ebase2"));
+        Assert.False(reloaded.IsAuthorized("Ebase1"));
+    }
+
+    [Fact]
+    public void CorruptFile_StartsWithSeedAdminOnly()
     {
         var dir = TempDir();
         File.WriteAllText(Path.Combine(dir, "admins.json"), "{ this is not json");
-        var s = AdminState.Load(dir, "Eowner");
-        Assert.True(s.IsAuthorized("Eowner"));
-        Assert.Single(s.AuthorizedAddresses());
+        var s = AdminState.Load(dir, "Eseed");
+        Assert.True(s.IsAuthorized("Eseed"));
+        Assert.Single(s.RemoteAdminAddresses());   // just the env seed
     }
 
     [Fact]
-    public void Load_RequiresOwner()
+    public void Load_RequiresSeedAdmin()
     {
         Assert.Throws<ArgumentException>(() => AdminState.Load(TempDir(), ""));
     }

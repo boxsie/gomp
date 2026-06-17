@@ -39,7 +39,7 @@ internal sealed class RoomHost : IAsyncDisposable
         EnsembleClient client,
         string hostName,
         string dataDir,
-        string owner,
+        string seedAdmin,
         int historyMax,
         ILoggerFactory loggerFactory)
     {
@@ -49,7 +49,7 @@ internal sealed class RoomHost : IAsyncDisposable
         _historyMax = historyMax;
         _loggerFactory = loggerFactory;
         _log = loggerFactory.CreateLogger<RoomHost>();
-        _admin = AdminState.Load(dataDir, owner);
+        _admin = AdminState.Load(dataDir, seedAdmin);
         _catalog = RoomCatalog.Load(dataDir);
     }
 
@@ -57,16 +57,18 @@ internal sealed class RoomHost : IAsyncDisposable
     public string? BaseAddress => _baseSvc?.ServiceAddress;
 
     /// <summary>
-    /// The base-identity manifest: ALLOWLIST-gated to the owner + admins, RPC
-    /// transport, sub-identity minting authorized. Built here because the
-    /// authorized set comes from <see cref="AdminState"/>; the unified backend
-    /// registers the base itself (with its combined handler) and so needs this.
+    /// The base-identity manifest: ALLOWLIST-gated to the delegated admins (the env
+    /// seed + promoted admins), RPC transport, sub-identity minting authorized. The
+    /// owner is gomp's own base address — never in its own allowlist — so it is not
+    /// listed here; it's bound via <see cref="AdminState.SetOwner"/> after this
+    /// registers. Built here because the allowlist comes from <see cref="AdminState"/>;
+    /// the unified backend registers the base itself (with its combined handler).
     /// </summary>
     internal ServiceManifest BuildBaseManifest() =>
         ServiceManifest.NewBuilder(_hostName)
             .Description("Ensemble room host (ADR-0007)")
             .Transport(ServiceTransport.Rpc)
-            .Acl(ServiceAcl.Allowlist, _admin.AuthorizedAddresses().ToArray())
+            .Acl(ServiceAcl.Allowlist, _admin.RemoteAdminAddresses().ToArray())
             .MaxPayloadBytes(BaseMaxPayload)
             .Build();
 
@@ -83,9 +85,11 @@ internal sealed class RoomHost : IAsyncDisposable
             OnBaseErrorAsync,
             ct).ConfigureAwait(false);
         _ownsBase = true;
+        // Option B: gomp's own base account owns the host (and seeds Invite rooms).
+        _admin.SetOwner(_baseSvc.ServiceAddress);
 
-        _log.LogInformation("room host {Name} base identity {Addr} registered; owner {Owner}",
-            _hostName, _baseSvc.ServiceAddress, _admin.Owner);
+        _log.LogInformation("room host {Name} base identity {Addr} registered; owner = base account",
+            _hostName, _baseSvc.ServiceAddress);
 
         await InitRoomsAsync(ct).ConfigureAwait(false);
     }
@@ -101,8 +105,10 @@ internal sealed class RoomHost : IAsyncDisposable
     {
         _baseSvc = baseSvc;
         _ownsBase = false;
-        _log.LogInformation("room host {Name} attached to base identity {Addr}; owner {Owner}",
-            _hostName, baseSvc.ServiceAddress, _admin.Owner);
+        // Option B: gomp's own base account owns the host (and seeds Invite rooms).
+        _admin.SetOwner(baseSvc.ServiceAddress);
+        _log.LogInformation("room host {Name} attached to base identity {Addr}; owner = base account",
+            _hostName, baseSvc.ServiceAddress);
         await InitRoomsAsync(ct).ConfigureAwait(false);
     }
 
@@ -389,8 +395,10 @@ internal sealed class RoomHost : IAsyncDisposable
                 builder.Acl(ServiceAcl.Contacts);
                 break;
             case RoomKind.Invite:
-                // Seed the owner so the allowlist is never empty (the SDK rejects
-                // an empty allowlist) and the owner can always enter their room.
+                // Seed the owner — gomp's own base account, the SAME identity the
+                // operator connects as (membership == owner, option B) — so the
+                // allowlist is never empty (the SDK rejects an empty allowlist) and
+                // the owner can always enter their own room (ticket a5fbf64b).
                 var allow = rec.Members.Append(_admin.Owner).Distinct().ToArray();
                 builder.Acl(ServiceAcl.Allowlist, allow);
                 break;

@@ -57,13 +57,13 @@ internal sealed class GompBackend : IAsyncDisposable
         EnsembleClient client,
         string hostName,
         string dataDir,
-        string owner,
+        string seedAdmin,
         int historyMax,
         ILoggerFactory loggerFactory)
     {
         _client = client;
         _log = loggerFactory.CreateLogger<GompBackend>();
-        _host = new RoomHost(client, hostName, dataDir, owner, historyMax, loggerFactory);
+        _host = new RoomHost(client, hostName, dataDir, seedAdmin, historyMax, loggerFactory);
     }
 
     /// <summary>The backend's base (member) E-address — what posts are signed

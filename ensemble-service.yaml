@@ -21,7 +21,7 @@
 # service name, so the name-keyed data dir (rooms, history, admins) survives.
 
 name: gomp
-version: 0.2.8
+version: 0.2.9
 description: >-
   Host-led group rooms: create, join and chat in small,
   self-hostable rooms with history backfill and presence.
@@ -49,16 +49,19 @@ capabilities:
 
 settings:
   - key: ROOM_HOST_OWNER
-    label: Owner address
+    label: Delegated admin address
     description: >-
-      The operator E-address with full admin authority over this host and its
-      rooms. Defaults to this node's own account (the installing app); only set
-      it to delegate admin to a different identity (e.g. a headless host).
+      An E-address granted admin authority to drive this host remotely (create /
+      close rooms, manage members). The host OWNS its rooms under its OWN base
+      account (option B) — this is an ADDITIONAL delegated admin, not the owner.
+      Defaults to this node's own account (the installing app); set it to a
+      different identity to administer a headless host from elsewhere.
     type: address
     required: true
     # ${self} resolves at spawn to the hosting node's own address (daemon
-    # SettingDefaultSelf): zero-config, footgun-free owner on a desktop
-    # self-host, overridable via `ensemble service env` on a headless box.
+    # SettingDefaultSelf): zero-config delegated admin on a desktop self-host,
+    # overridable via `ensemble service env` on a headless box. The room owner is
+    # gomp's own base service account, bound at registration — never this value.
     default: "${self}"
   - key: ROOM_HISTORY_MAX
     label: Per-room history limit

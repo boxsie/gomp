@@ -180,6 +180,36 @@ public sealed class LiveTwoPartyTests
             Assert.Equal(PostTrust.Verified, live.Trust);
             _out.WriteLine("live msg3 fanned out to both; Verified at B");
 
+            // ===== 6b. Invite room: the allowlist gate admits a member A adds =====
+            // Wire coverage for the Invite room kind whose owner-seeding the option-B
+            // identity model fixes (ticket a5fbf64b): the room owner is the host's OWN
+            // base account, so an Invite allowlist is never empty and the operator
+            // (== that account) is never locked out. Here A is a delegated admin
+            // driving create/add — NOT a room member — so only B, once added, is
+            // admitted. (Open rooms above skip the allowlist; this proves the gate.)
+            var clubCreate = await gompA.CreateRoomAsync(hostBase, "club", RoomKind.Invite);
+            Assert.True(clubCreate.Ok, $"create Invite room failed: {clubCreate.Error}");
+            var clubAddr = clubCreate.Rooms.Single(r => r.Name == "club").Addr;
+            _out.WriteLine($"Invite room 'club' = {Short(clubAddr)}");
+
+            var addB = await gompA.AddMemberAsync(hostBase, "club", bAddr);
+            Assert.True(addB.Ok, $"add member to Invite room failed: {addB.Error}");
+
+            var obsClub = new Recorder(_out, "B@club");
+            var sessClub = await gompB.JoinRoomAsync(clubAddr, obsClub);
+            await WaitUntil(() => obsClub.Has(p => p.online && p.addr == bAddr) || obsClub.RosterHas(bAddr),
+                LinkTimeout, "B (added) admitted to the Invite room", () => Dump(dB, dHost),
+                nudge: () => sessClub.RequestRosterAsync());
+
+            await sessClub.SendChatAsync("club-hello");
+            await WaitUntil(() => obsClub.PostByContent("club-hello") is not null,
+                MsgTimeout, "B's Invite-room post fans back", () => Dump(dB, dHost));
+            var clubPost = obsClub.PostByContent("club-hello")!;
+            Assert.Equal(bAddr, clubPost.Sender);
+            Assert.Equal(1, clubPost.Seq);
+            Assert.Empty(obsClub.Errors);
+            _out.WriteLine("Invite room 'club': added member B admitted, posted, fan-out OK");
+
             // ===== 7. Forged: a malicious-host fan-out under A's name, bad signature =====
             await InjectAsHostAsync(host, "general", roomAddr, bAddr,
                 sender: aAddr, content: "forged-words", sig: new byte[64], seq: 9001);
