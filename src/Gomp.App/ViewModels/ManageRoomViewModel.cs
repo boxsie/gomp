@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Gomp.App.Services;
@@ -33,6 +34,16 @@ public sealed partial class ManageRoomViewModel : ObservableObject
         _dismiss = dismiss;
         _self = gateway.SelfAddress;
         _selectedKind = room.Kind;
+        PropertyChanged += OnFieldChanged;
+    }
+
+    // Settings (display name / topic / retention) commit themselves: an edit
+    // re-arms a debounce, then writes — no save button. Apply()'s host-driven
+    // writes are suppressed via _loading so they don't echo straight back.
+    private void OnFieldChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DisplayName) or nameof(Topic) or nameof(RetentionMax))
+            QueueSettingsSave();
     }
 
     // Only owned rooms ever open the manager, so Admin is always present here.
@@ -73,6 +84,17 @@ public sealed partial class ManageRoomViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string? _status;
 
+    // Settings (display name / topic / retention) commit themselves — no save
+    // button (visibility still needs an explicit "apply"). _loading suppresses the
+    // auto-save while Apply() pushes host state into the fields; _settingsDirty +
+    // the debounce coalesce a burst of keystrokes into one write.
+    private bool _loading;
+    private bool _settingsDirty;
+    private CancellationTokenSource? _saveDebounce;
+
+    // Debounce window before an edited setting auto-commits.
+    private static readonly TimeSpan SaveDebounce = TimeSpan.FromMilliseconds(600);
+
     /// <summary>Fetch the room's full detail (members, settings) and populate the form.</summary>
     public async Task LoadAsync()
     {
@@ -87,10 +109,19 @@ public sealed partial class ManageRoomViewModel : ObservableObject
 
     private void Apply(RoomDetail d)
     {
-        SelectedKind = d.Kind;
-        DisplayName = d.DisplayName;
-        Topic = d.Topic;
-        RetentionMax = d.RetentionMax;
+        _loading = true;
+        try
+        {
+            SelectedKind = d.Kind;
+            DisplayName = d.DisplayName;
+            Topic = d.Topic;
+            RetentionMax = d.RetentionMax;
+        }
+        finally
+        {
+            _loading = false;
+            _settingsDirty = false; // these values came FROM the host
+        }
 
         Members.Clear();
         foreach (var m in d.Members)
@@ -130,10 +161,44 @@ public sealed partial class ManageRoomViewModel : ObservableObject
     private Task RemoveAsync(ManageMemberViewModel m) =>
         RunAsync($"removed {m.DisplayName}", () => _gateway.RemoveMemberAsync(Admin.HostBase, Admin.RoomName, m.Address));
 
+    private void QueueSettingsSave()
+    {
+        if (_loading) return;
+        _settingsDirty = true;
+        _saveDebounce?.Cancel();
+        _saveDebounce?.Dispose();
+        var cts = new CancellationTokenSource();
+        _saveDebounce = cts;
+        _ = DebounceThenSaveAsync(cts.Token);
+    }
+
+    private async Task DebounceThenSaveAsync(CancellationToken ct)
+    {
+        try { await Task.Delay(SaveDebounce, ct).ConfigureAwait(true); }
+        catch (OperationCanceledException) { return; } // superseded by a newer edit / a flush
+        await SaveSettingsAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Commit a pending debounced edit immediately (on Done / close) so an
+    /// in-flight keystroke isn't dropped.</summary>
+    internal async Task FlushPendingSaveAsync()
+    {
+        _saveDebounce?.Cancel();
+        if (_settingsDirty) await SaveSettingsAsync().ConfigureAwait(true);
+    }
+
     [RelayCommand]
-    private Task SaveSettingsAsync() =>
-        RunAsync("settings saved",
-            () => _gateway.UpdateRoomAsync(Admin.HostBase, Admin.RoomName, DisplayName.Trim(), Topic.Trim(), RetentionMax));
+    private async Task SaveSettingsAsync()
+    {
+        var display = DisplayName.Trim();
+        var topic = Topic.Trim();
+        var ok = await RunAsync("settings saved",
+            () => _gateway.UpdateRoomAsync(Admin.HostBase, Admin.RoomName, display, topic, RetentionMax),
+            reload: false).ConfigureAwait(true);
+        if (!ok) return; // stays dirty — a flush (Done) or the next edit retries
+        _settingsDirty = false;
+        _room.SetDisplayName(display); // reflect on the room card at once
+    }
 
     [RelayCommand]
     private Task ClearHistoryAsync() =>
@@ -147,13 +212,18 @@ public sealed partial class ManageRoomViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void Done() => _dismiss();
+    private async Task DoneAsync()
+    {
+        await FlushPendingSaveAsync().ConfigureAwait(true);
+        _dismiss();
+    }
 
     // Run a gateway admin call with busy/status handling, then reload the detail
     // (so members, admin badges and kind reflect the change) unless told not to.
-    private async Task RunAsync(string okMsg, Func<Task<AdminResult>> op, bool reload = true)
+    // Returns whether the op succeeded.
+    private async Task<bool> RunAsync(string okMsg, Func<Task<AdminResult>> op, bool reload = true)
     {
-        if (IsBusy) return;
+        if (IsBusy) return false;
         IsBusy = true;
         Status = null;
         try
@@ -162,14 +232,16 @@ public sealed partial class ManageRoomViewModel : ObservableObject
             if (!res.Ok)
             {
                 Status = res.Error ?? "the host refused";
-                return;
+                return false;
             }
             Status = okMsg;
             if (reload) await LoadAsync().ConfigureAwait(true);
+            return true;
         }
         catch (Exception ex)
         {
             Status = ex.Message;
+            return false;
         }
         finally
         {

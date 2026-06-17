@@ -63,14 +63,26 @@ internal sealed class Room
 
     /// <summary>A member's connection became established: add to roster, send them
     /// the current roster, and announce their arrival to everyone else.</summary>
-    public async Task OnConnectionEstablishedAsync(string addr)
+    public Task OnConnectionEstablishedAsync(string addr) => BringOnlineAsync(addr);
+
+    /// <summary>
+    /// Mark a member online; if they were not already present, hand them the
+    /// current roster and announce their arrival to everyone else. Idempotent — a
+    /// repeat for an already-online member is a no-op. Driven both by the
+    /// platform's connection_established event AND, defensively, by the first
+    /// inbound room-op from a member (see <see cref="OnRpcMessageAsync"/>), so a
+    /// member is never stranded off the roster when no establish event arrives.
+    /// </summary>
+    private async Task BringOnlineAsync(string addr)
     {
+        bool isNew;
         List<string> others;
         lock (_gate)
         {
-            _online.Add(addr);
+            isNew = _online.Add(addr);
             others = _online.Where(a => a != addr).ToList();
         }
+        if (!isNew) return;
         // Give the joiner the current roster up front (saves a round trip).
         await SendAsync(addr, new RoomEnvelope { Roster = BuildRoster() }).ConfigureAwait(false);
         // Announce the arrival to the rest.
@@ -97,6 +109,15 @@ internal sealed class Room
     /// <summary>Dispatch an inbound room-ops payload from member <paramref name="from"/>.</summary>
     public async Task OnRpcMessageAsync(string from, byte[] payload)
     {
+        // The platform doesn't always deliver a connection_established to the
+        // inbound (host) side — notably a same-daemon self-join, where gomp's own
+        // base account dials a room it hosts (the owner entering their own room) —
+        // and a member announces (Hello + backfill) the instant it dials, which can
+        // outrun the establish event. Treat the first room-op from a member as the
+        // connection, so they land on the roster and get their own fan-out. The
+        // ACL gate already vetted the dial; this is idempotent for the normal path.
+        await BringOnlineAsync(from).ConfigureAwait(false);
+
         RoomEnvelope env;
         try
         {

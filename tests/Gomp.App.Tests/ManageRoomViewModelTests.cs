@@ -112,6 +112,35 @@ public sealed class ManageRoomViewModelTests
     }
 
     [Fact]
+    public async Task EditingSettings_AutoCommitsOnDone()
+    {
+        // No save button: an edit is committed when the page is dismissed (or after
+        // the debounce). Done flushes deterministically.
+        var gw = WithDetail(RoomKind.Invite);
+        var vm = New(gw, OwnedRoom());
+        await vm.LoadAsync();
+
+        vm.DisplayName = "Snuggery";
+        vm.Topic = "lock-in";
+        await vm.DoneCommand.ExecuteAsync(null);
+
+        Assert.Contains(gw.Updated, x => x is { Room: "snug", Display: "Snuggery", Topic: "lock-in" });
+    }
+
+    [Fact]
+    public async Task Load_DoesNotAutoSave()
+    {
+        // Applying host state into the fields must not echo back as a write.
+        var gw = WithDetail(RoomKind.Friends, new RoomMemberInfo(Self, IsAdmin: true, Online: true));
+        var vm = New(gw, OwnedRoom());
+
+        await vm.LoadAsync();
+        await vm.FlushPendingSaveAsync();
+
+        Assert.Empty(gw.Updated);
+    }
+
+    [Fact]
     public async Task ClearHistory_SendsClear()
     {
         var gw = WithDetail(RoomKind.Invite);
@@ -154,12 +183,12 @@ public sealed class ManageRoomViewModelTests
     }
 
     [Fact]
-    public void Done_Dismisses()
+    public async Task Done_Dismisses()
     {
         var dismissed = false;
         var vm = New(WithDetail(RoomKind.Invite), OwnedRoom(), dismiss: () => dismissed = true);
 
-        vm.DoneCommand.Execute(null);
+        await vm.DoneCommand.ExecuteAsync(null);
 
         Assert.True(dismissed);
     }

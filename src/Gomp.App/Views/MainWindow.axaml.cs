@@ -67,7 +67,10 @@ public partial class MainWindow : Window
         if (e.Key != Key.Enter || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
             return;
 
-        if (sender is TextBox { DataContext: RoomViewModel room } && room.SendCommand.CanExecute(null))
+        // The composer's DataContext is the shell VM (it binds the room via
+        // SelectedRoom.Draft), so reach the room through the selection, not the
+        // TextBox's own context.
+        if (DataContext is MainWindowViewModel { SelectedRoom: { } room } && room.SendCommand.CanExecute(null))
             room.SendCommand.Execute(null);
         e.Handled = true;
     }

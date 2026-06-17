@@ -18,6 +18,7 @@ public sealed partial class RoomViewModel : ObservableObject, IRoomObserver
 {
     private readonly IUiDispatcher _ui;
     private readonly string _self;
+    private readonly string? _slug; // the room's name on its host (owned rooms) — the title fallback
     private readonly Func<RoomViewModel, MemberViewModel, Task>? _remove;
     private readonly Func<RoomViewModel, Task>? _leave;
     private readonly Func<RoomViewModel, Task>? _manage;
@@ -38,6 +39,7 @@ public sealed partial class RoomViewModel : ObservableObject, IRoomObserver
         Address = address;
         _kind = kind;
         _self = selfAddress;
+        _slug = admin?.RoomName;
         _ui = ui;
         Admin = admin;
         _remove = remove;
@@ -71,12 +73,17 @@ public sealed partial class RoomViewModel : ObservableObject, IRoomObserver
         _ => "room",
     };
 
-    /// <summary>Reflect a host-side visibility change (from the management page).</summary>
-    internal void ApplyKind(RoomKind kind) => Kind = kind;
+    /// <summary>Reflect a host-side visibility change (from the management page).
+    /// Marshalled — the management page applies it off the daemon stream.</summary>
+    internal void ApplyKind(RoomKind kind) => _ui.InvokeAsync(() => Kind = kind);
 
-    /// <summary>Reflect a host-side display-name change; empty falls back to the short address.</summary>
-    internal void SetDisplayName(string displayName) =>
-        Title = string.IsNullOrWhiteSpace(displayName) ? Addr.Short(Address) : displayName;
+    /// <summary>Reflect a host-side display-name change; empty falls back to the
+    /// room's slug (or the short address when even that is unknown). Marshalled,
+    /// since the management page applies it off the daemon stream.</summary>
+    internal void SetDisplayName(string displayName) => _ui.InvokeAsync(() =>
+        Title = string.IsNullOrWhiteSpace(displayName)
+            ? (string.IsNullOrWhiteSpace(_slug) ? Addr.Short(Address) : _slug)
+            : displayName);
 
     public ObservableCollection<MessageViewModel> Messages { get; } = new();
     public ObservableCollection<MemberViewModel> Members { get; } = new();

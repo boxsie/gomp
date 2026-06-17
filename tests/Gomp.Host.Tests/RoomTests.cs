@@ -40,6 +40,34 @@ public sealed class RoomTests
     }
 
     [Fact]
+    public async Task FirstRoomOp_BringsSenderOnline_WithoutEstablishEvent()
+    {
+        // Same-daemon self-join (the owner entering their own room): the platform
+        // delivers no connection_established, so the member's first op IS the join.
+        // It must still land them on the roster (issue #2).
+        var (room, tx) = NewRoom();
+
+        await room.OnRpcMessageAsync("A", Posts.Hello("A-binding"));
+
+        Assert.Equal(1, room.OnlineCount);
+        Assert.Contains(tx.EnvelopesTo("A"), e => e.BodyCase == RoomEnvelope.BodyOneofCase.Roster);
+    }
+
+    [Fact]
+    public async Task FirstSubmit_FansBackToSender_WithoutEstablishEvent()
+    {
+        // With no establish event, a post from the (implicitly-online) sender still
+        // fans straight back — not only after a restart/backfill (issue #3).
+        var (room, tx) = NewRoom();
+
+        await room.OnRpcMessageAsync("A", Posts.Submit(Posts.Make("A", RoomAddr, "hi")));
+
+        var toA = tx.MessagesTo("A");
+        Assert.Single(toA);
+        Assert.Equal(1, toA[0].Message.Seq);
+    }
+
+    [Fact]
     public async Task Submit_SenderMismatch_Rejected_NoFanout()
     {
         var (room, tx) = NewRoom();

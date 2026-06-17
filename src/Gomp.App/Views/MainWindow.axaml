@@ -350,8 +350,10 @@
 
         <!-- ===================== MANAGE ROOM (owner) ===================== -->
         <Panel IsVisible="{Binding IsManageOpen}" Background="#B0000000">
-            <Border Classes="card" Width="560" MaxHeight="700" VerticalAlignment="Center"
-                    HorizontalAlignment="Center" Padding="0"
+            <!-- Stretch + margin keeps the whole card (incl. the fixed footer) inside
+                 the overlay at any window height; only the middle section scrolls. -->
+            <Border Classes="card" Width="560" MaxHeight="760" Margin="0,28"
+                    VerticalAlignment="Stretch" HorizontalAlignment="Center" Padding="0"
                     DataContext="{Binding Manage}" x:DataType="vm:ManageRoomViewModel">
                 <Grid RowDefinitions="Auto,*,Auto">
 
@@ -486,8 +488,7 @@
                                     <TextBox Width="160" HorizontalAlignment="Left"
                                              Text="{Binding RetentionMax, Mode=TwoWay}" />
                                 </StackPanel>
-                                <Button Classes="primary" HorizontalAlignment="Left" Content="save settings"
-                                        IsEnabled="{Binding !IsBusy}" Command="{Binding SaveSettingsCommand}" />
+                                <TextBlock Classes="faint" Text="Changes save automatically." />
                             </StackPanel>
 
                             <!-- danger zone -->
