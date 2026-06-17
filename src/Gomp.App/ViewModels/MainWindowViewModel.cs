@@ -64,6 +64,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             _gateway = await _factory.ConnectAsync().ConfigureAwait(true);
             SelfAddress = _gateway.SelfAddress;
             IsConnected = true;
+            await LoadHostedRoomsAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -221,6 +222,36 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     // ---- room membership ----
+
+    // After connecting, re-surface the rooms this node HOSTS (the backend
+    // re-registers them from its catalog on startup) so they're manageable —
+    // re-enter, or leave→close — instead of being orphaned and invisible.
+    // Re-attached with an AdminContext so the owner can close them.
+    private async Task LoadHostedRoomsAsync()
+    {
+        if (_gateway is null || string.IsNullOrEmpty(SelfAddress))
+            return;
+
+        AdminResult res;
+        try
+        {
+            res = await _gateway.ListRoomsAsync(SelfAddress).ConfigureAwait(true);
+        }
+        catch
+        {
+            return; // best-effort: a listing failure must not break connect
+        }
+        if (!res.Ok)
+            return;
+
+        foreach (var room in res.Rooms)
+        {
+            if (string.IsNullOrEmpty(room.Address) || Rooms.Any(r => r.Address == room.Address))
+                continue;
+            var admin = new AdminContext(SelfAddress, room.Name, CanRemove: room.Kind == RoomKind.Invite);
+            await JoinAsync(room.Address, room.Kind, admin, room.Name).ConfigureAwait(true);
+        }
+    }
 
     private async Task JoinAsync(string address, RoomKind kind, AdminContext? admin = null, string? title = null)
     {

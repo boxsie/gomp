@@ -101,8 +101,10 @@ internal sealed class FakeGateway : IGompGateway, IGompGatewayFactory
         return Task.FromResult(result);
     }
 
+    public List<RoomSummary> Hosted { get; } = new();
+
     public Task<AdminResult> ListRoomsAsync(string hostBase, CancellationToken ct = default)
-        => Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+        => Task.FromResult(new AdminResult(true, null, Hosted.ToArray()));
 
     public AdminResult CloseResult { get; set; } = new(true, null, Array.Empty<RoomSummary>());
 

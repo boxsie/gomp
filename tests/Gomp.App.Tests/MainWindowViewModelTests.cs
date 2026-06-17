@@ -26,6 +26,28 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task Connect_ResurfacesHostedRooms_AsOwnedAndClosable()
+    {
+        var gw = new FakeGateway();   // self = "Eself"
+        gw.Hosted.Add(new RoomSummary("snug", "Eroom-snug", RoomKind.Invite));
+        var vm = New(gw);
+
+        await vm.ConnectCommand.ExecuteAsync(null);
+
+        var room = Assert.Single(vm.Rooms);
+        Assert.Equal("Eroom-snug", room.Address);
+        Assert.Equal("snug", room.Title);
+        Assert.True(room.IsOwner);                          // re-attached with AdminContext
+        Assert.Contains(gw.Joined, h => h.Address == "Eroom-snug");
+
+        // and it's reachable to close via the new prompt path
+        await room.LeaveCommand.ExecuteAsync(null);
+        await vm.ConfirmCloseRoomCommand.ExecuteAsync(null);
+        Assert.Equal(("Eself", "snug"), Assert.Single(gw.Closed));
+        Assert.Empty(vm.Rooms);
+    }
+
+    [Fact]
     public async Task Connect_Failure_SurfacesError()
     {
         var gw = new FakeGateway { FailConnect = true, ConnectError = "socket missing" };
