@@ -24,7 +24,7 @@ internal sealed class RoomStore
 {
     private readonly object _gate = new();
     private readonly string _path;
-    private readonly int _maxMessages;
+    private int _maxMessages;
     private readonly LinkedList<RoomMessage> _messages = new();
     private long _seq;
 
@@ -38,6 +38,12 @@ internal sealed class RoomStore
     {
         _path = path;
         _maxMessages = maxMessages;
+    }
+
+    /// <summary>The retention cap currently in force (messages kept before the oldest drop).</summary>
+    public int MaxMessages
+    {
+        get { lock (_gate) return _maxMessages; }
     }
 
     /// <summary>
@@ -157,6 +163,41 @@ internal sealed class RoomStore
             resp.Complete = !truncated;
         }
         return resp;
+    }
+
+    /// <summary>
+    /// Drop all stored history and reset the sequence cursor. Live membership is
+    /// untouched; members re-backfill from empty. Used by the admin "clear
+    /// history" op.
+    /// </summary>
+    public void Clear()
+    {
+        lock (_gate)
+        {
+            _messages.Clear();
+            _seq = 0;
+            Rewrite();
+        }
+    }
+
+    /// <summary>
+    /// Change the retention cap at runtime (per-room override). A smaller cap
+    /// trims the live tail and compacts the file to match; a larger one just
+    /// raises the ceiling. <paramref name="maxMessages"/> &lt;= 0 is ignored.
+    /// </summary>
+    public void SetRetention(int maxMessages)
+    {
+        if (maxMessages <= 0) return;
+        lock (_gate)
+        {
+            if (maxMessages == _maxMessages) return;
+            _maxMessages = maxMessages;
+            if (_messages.Count > _maxMessages)
+            {
+                while (_messages.Count > _maxMessages) _messages.RemoveFirst();
+                Rewrite();
+            }
+        }
     }
 
     // Caller holds _gate.

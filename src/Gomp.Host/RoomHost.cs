@@ -228,6 +228,14 @@ internal sealed class RoomHost : IAsyncDisposable
                 return await PromoteAdminAsync(req.RequestId, req.PromoteAdmin.Addr).ConfigureAwait(false);
             case AdminRequest.OpOneofCase.DemoteAdmin:
                 return await DemoteAdminAsync(req.RequestId, req.DemoteAdmin.Addr).ConfigureAwait(false);
+            case AdminRequest.OpOneofCase.SetKind:
+                return await SetKindAsync(req.RequestId, req.SetKind.Room, req.SetKind.Kind).ConfigureAwait(false);
+            case AdminRequest.OpOneofCase.ClearHistory:
+                return ClearHistoryOp(req.RequestId, req.ClearHistory.Room);
+            case AdminRequest.OpOneofCase.UpdateRoom:
+                return UpdateRoomOp(req.RequestId, req.UpdateRoom);
+            case AdminRequest.OpOneofCase.RoomDetail:
+                return RoomDetailOp(req.RequestId, req.RoomDetail.Room);
             default:
                 return Fail(req.RequestId, "unknown_op");
         }
@@ -354,6 +362,98 @@ internal sealed class RoomHost : IAsyncDisposable
         return Ok(reqId);
     }
 
+    private async Task<AdminResponse> SetKindAsync(string reqId, string name, RoomKind kind)
+    {
+        if (kind == RoomKind.Unspecified) return Fail(reqId, "kind_required");
+
+        await _roomsLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (!_catalog.TryGet(name, out var rec)) return Fail(reqId, "no_such_room");
+            if (!_rooms.TryGetValue(name, out var old)) return Fail(reqId, "room_not_live");
+            if (rec.Kind == kind)
+                return new AdminResponse { RequestId = reqId, Ok = true, Rooms = { RoomInfoFor(rec, old.Room) } };
+
+            // Re-register the sub-identity under the new ACL tier. The address is
+            // derived from <host>/<name> so it's preserved; the on-disk history is
+            // preserved (RegisterRoomAsync re-opens the same store); connected
+            // members transiently reconnect through the new gate.
+            await old.Service.DisposeAsync().ConfigureAwait(false);
+            _rooms.Remove(name);
+            var updated = rec with { Kind = kind };
+            RoomHandle handle;
+            try
+            {
+                handle = await RegisterRoomAsync(updated, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "set_kind: re-register of room {Room} failed", name);
+                return Fail(reqId, "reregister_failed");
+            }
+            _catalog.Put(updated);
+            _log.LogInformation("room {Room} visibility changed to {Kind}", name, kind);
+            return new AdminResponse { RequestId = reqId, Ok = true, Rooms = { RoomInfoFor(updated, handle.Room) } };
+        }
+        finally
+        {
+            _roomsLock.Release();
+        }
+    }
+
+    private AdminResponse ClearHistoryOp(string reqId, string name)
+    {
+        if (!_catalog.Contains(name)) return Fail(reqId, "no_such_room");
+        if (!_rooms.TryGetValue(name, out var handle)) return Fail(reqId, "room_not_live");
+        handle.Room.ClearHistory();
+        _log.LogInformation("room {Room} history cleared", name);
+        return Ok(reqId);
+    }
+
+    private AdminResponse UpdateRoomOp(string reqId, UpdateRoom op)
+    {
+        var updated = _catalog.UpdateMeta(op.Room, op.DisplayName, op.Topic, op.RetentionMax);
+        if (updated is null) return Fail(reqId, "no_such_room");
+
+        // A retention change takes effect on the live store immediately; the
+        // effective cap is the per-room override or the host global.
+        if (_rooms.TryGetValue(op.Room, out var handle))
+            handle.Room.SetRetention(EffectiveRetention(updated));
+
+        return new AdminResponse { RequestId = reqId, Ok = true, Rooms = { RoomInfoFor(updated, _rooms.GetValueOrDefault(op.Room)?.Room) } };
+    }
+
+    private AdminResponse RoomDetailOp(string reqId, string name)
+    {
+        if (!_catalog.TryGet(name, out var rec)) return Fail(reqId, "no_such_room");
+        _rooms.TryGetValue(name, out var handle);
+
+        var online = handle is null
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : new HashSet<string>(handle.Room.OnlineMembers(), StringComparer.Ordinal);
+
+        // The management roster is the stored allowlist ∪ whoever's currently
+        // connected (Open/Friends rooms have no allowlist, so they show live
+        // members only). Each entry is flagged admin (owner or promoted) and online.
+        var addrs = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var a in rec.Members.Concat(online))
+            if (seen.Add(a)) addrs.Add(a);
+
+        var detail = new RoomDetailInfo
+        {
+            Name = rec.Name,
+            Kind = rec.Kind,
+            DisplayName = rec.DisplayName,
+            Topic = rec.Topic,
+            RetentionMax = rec.RetentionMax,
+        };
+        foreach (var a in addrs)
+            detail.Members.Add(new MemberInfo { Addr = a, IsAdmin = _admin.IsAuthorized(a), Online = online.Contains(a) });
+
+        return new AdminResponse { RequestId = reqId, Ok = true, Detail = detail };
+    }
+
     // ---- test seam (integration e2e only; see InternalsVisibleTo) ----
 
     /// <summary>
@@ -430,7 +530,7 @@ internal sealed class RoomHost : IAsyncDisposable
             },
             ct).ConfigureAwait(false);
 
-        var store = RoomStore.Open(_dataDir, rec.Name, _historyMax);
+        var store = RoomStore.Open(_dataDir, rec.Name, EffectiveRetention(rec));
         var room = new Room(rec.Name, rec.Kind, new RegisteredServiceTransport(svc), store, roomLog);
         ready.SetResult(room);
 
@@ -456,7 +556,12 @@ internal sealed class RoomHost : IAsyncDisposable
         Kind = rec.Kind,
         Members = rec.Members.Count,
         Online = room?.OnlineCount ?? 0,
+        DisplayName = rec.DisplayName,
+        Topic = rec.Topic,
     };
+
+    /// <summary>The retention cap for a room: its per-room override, or the host global.</summary>
+    private int EffectiveRetention(RoomRecord rec) => rec.RetentionMax > 0 ? rec.RetentionMax : _historyMax;
 
     private ValueTask OnBaseErrorAsync(ServiceError err)
     {

@@ -10,7 +10,13 @@ namespace Gomp.Host;
 /// deterministically from the node seed + the <c>&lt;host&gt;/&lt;name&gt;</c>
 /// path, so re-registering the same name reproduces the same address.
 /// </summary>
-internal sealed record RoomRecord(string Name, RoomKind Kind, IReadOnlyList<string> Members);
+internal sealed record RoomRecord(
+    string Name,
+    RoomKind Kind,
+    IReadOnlyList<string> Members,
+    string DisplayName = "",
+    string Topic = "",
+    int RetentionMax = 0); // 0 = use the host's global ROOM_HISTORY_MAX default
 
 /// <summary>
 /// The set of rooms a host runs, persisted as JSON under the service data dir.
@@ -44,7 +50,9 @@ internal sealed class RoomCatalog
                 if (dto?.Rooms is { } list)
                 {
                     foreach (var r in list)
-                        rooms.Add(new RoomRecord(r.Name, (RoomKind)r.Kind, r.Members ?? Array.Empty<string>()));
+                        rooms.Add(new RoomRecord(
+                            r.Name, (RoomKind)r.Kind, r.Members ?? Array.Empty<string>(),
+                            r.DisplayName ?? "", r.Topic ?? "", r.RetentionMax));
                 }
             }
             catch (Exception ex) when (ex is JsonException or IOException)
@@ -120,12 +128,52 @@ internal sealed class RoomCatalog
         }
     }
 
+    /// <summary>Change a room's kind (ACL tier); persists. Returns the new record, or null if unknown / unchanged.</summary>
+    public RoomRecord? SetKind(string name, RoomKind kind)
+    {
+        lock (_gate)
+        {
+            if (!_rooms.TryGetValue(name, out var rec)) return null;
+            if (rec.Kind == kind) return null;
+            var updated = rec with { Kind = kind };
+            _rooms[name] = updated;
+            Save();
+            return updated;
+        }
+    }
+
+    /// <summary>Update a room's display name, topic and per-room retention; persists. Returns the new record, or null if unknown.</summary>
+    public RoomRecord? UpdateMeta(string name, string displayName, string topic, int retentionMax)
+    {
+        lock (_gate)
+        {
+            if (!_rooms.TryGetValue(name, out var rec)) return null;
+            var updated = rec with
+            {
+                DisplayName = displayName,
+                Topic = topic,
+                RetentionMax = retentionMax < 0 ? 0 : retentionMax,
+            };
+            _rooms[name] = updated;
+            Save();
+            return updated;
+        }
+    }
+
     private void Save()
     {
         var dto = new CatalogDto
         {
             Rooms = _rooms.Values
-                .Select(r => new RoomDto { Name = r.Name, Kind = (int)r.Kind, Members = r.Members.ToArray() })
+                .Select(r => new RoomDto
+                {
+                    Name = r.Name,
+                    Kind = (int)r.Kind,
+                    Members = r.Members.ToArray(),
+                    DisplayName = r.DisplayName,
+                    Topic = r.Topic,
+                    RetentionMax = r.RetentionMax,
+                })
                 .ToArray(),
         };
         AtomicFile.Write(_path, JsonSerializer.Serialize(dto, JsonOpts));
@@ -143,5 +191,8 @@ internal sealed class RoomCatalog
         public string Name { get; set; } = "";
         public int Kind { get; set; }
         public string[]? Members { get; set; }
+        public string? DisplayName { get; set; }
+        public string? Topic { get; set; }
+        public int RetentionMax { get; set; }
     }
 }

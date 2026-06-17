@@ -31,6 +31,22 @@ internal sealed class SampleGateway : IGompGateway, IGompGatewayFactory
     public Task<AdminResult> PromoteAdminAsync(string hostBase, string addr, CancellationToken ct = default) => Ok();
     public Task<AdminResult> DemoteAdminAsync(string hostBase, string addr, CancellationToken ct = default) => Ok();
 
+    public Task<AdminResult> SetKindAsync(string hostBase, string room, RoomKind kind, CancellationToken ct = default) => Ok();
+    public Task<AdminResult> ClearHistoryAsync(string hostBase, string room, CancellationToken ct = default) => Ok();
+    public Task<AdminResult> UpdateRoomAsync(string hostBase, string room, string displayName, string topic, int retentionMax, CancellationToken ct = default) => Ok();
+
+    public Task<AdminResult> RoomDetailAsync(string hostBase, string room, CancellationToken ct = default)
+    {
+        var members = new[]
+        {
+            new RoomMemberInfo("Eself9mQ2kP7vX", IsAdmin: true, Online: true),
+            new RoomMemberInfo("Efriend4nB8aLZ", IsAdmin: false, Online: true),
+            new RoomMemberInfo("Eguest2cW1rTm", IsAdmin: false, Online: false),
+        };
+        var detail = new Gomp.App.Services.RoomDetail(RoomKind.Invite, "The Snug", "after-hours chat", 0, members);
+        return Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>(), detail));
+    }
+
     private static Task<AdminResult> Ok() => Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;

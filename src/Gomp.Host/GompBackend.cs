@@ -338,6 +338,19 @@ internal sealed class GompBackend : IAsyncDisposable
             case Gw.AdminOp.OpOneofCase.Demote:
                 req.DemoteAdmin = new DemoteAdmin { Addr = op.Demote.Addr };
                 break;
+            // The management ops carry rooms.proto messages verbatim — no re-map.
+            case Gw.AdminOp.OpOneofCase.SetKind:
+                req.SetKind = op.SetKind;
+                break;
+            case Gw.AdminOp.OpOneofCase.ClearHistory:
+                req.ClearHistory = op.ClearHistory;
+                break;
+            case Gw.AdminOp.OpOneofCase.Update:
+                req.UpdateRoom = op.Update;
+                break;
+            case Gw.AdminOp.OpOneofCase.Detail:
+                req.RoomDetail = op.Detail;
+                break;
         }
         return req;
     }
@@ -348,7 +361,9 @@ internal sealed class GompBackend : IAsyncDisposable
         // own correlation id in resp, not the FE's.
         var ar = new Gw.AdminResult { RequestId = requestId, Ok = resp.Ok, Error = resp.Error ?? string.Empty };
         foreach (var r in resp.Rooms)
-            ar.Rooms.Add(new Gw.RoomSummary { Name = r.Name, Addr = r.Addr, Kind = r.Kind });
+            ar.Rooms.Add(new Gw.RoomSummary { Name = r.Name, Addr = r.Addr, Kind = r.Kind, DisplayName = r.DisplayName });
+        if (resp.Detail is not null)
+            ar.Detail = resp.Detail; // reused verbatim from the rooms wire
         return new Gw.BeEvent { AdminResult = ar };
     }
 

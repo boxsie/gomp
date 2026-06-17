@@ -2,16 +2,29 @@ using Gomp.Protocol;
 
 namespace Gomp.App.Services;
 
-/// <summary>One room as the host describes it in an admin response (the fields
-/// the app consumes today — a future room browser can carry counts too).</summary>
-public sealed record RoomSummary(string Name, string Address, RoomKind Kind);
+/// <summary>One room as the host describes it in an admin response. <see cref="DisplayName"/>
+/// is the friendly name (empty falls back to the slug <see cref="Name"/>).</summary>
+public sealed record RoomSummary(string Name, string Address, RoomKind Kind, string DisplayName = "");
 
 /// <summary>The flattened outcome of an admin op — the proto <c>AdminResponse</c>
-/// reshaped into something the UI (and tests) can hold without protobuf.</summary>
-public sealed record AdminResult(bool Ok, string? Error, IReadOnlyList<RoomSummary> Rooms)
+/// reshaped into something the UI (and tests) can hold without protobuf.
+/// <see cref="Detail"/> is populated only for a room-detail op.</summary>
+public sealed record AdminResult(bool Ok, string? Error, IReadOnlyList<RoomSummary> Rooms, RoomDetail? Detail = null)
 {
     public static AdminResult Fail(string error) => new(false, error, Array.Empty<RoomSummary>());
 }
+
+/// <summary>The management-page view of a room: its settings plus the full member
+/// roster (allowlist ∪ currently-online), protobuf-free for the UI and tests.</summary>
+public sealed record RoomDetail(
+    RoomKind Kind,
+    string DisplayName,
+    string Topic,
+    int RetentionMax,
+    IReadOnlyList<RoomMemberInfo> Members);
+
+/// <summary>One member in the management roster: their address, admin status, and presence.</summary>
+public sealed record RoomMemberInfo(string Address, bool IsAdmin, bool Online);
 
 /// <summary>
 /// What the member knows about a room it owns: the host base address admin ops go

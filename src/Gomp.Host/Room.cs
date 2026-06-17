@@ -47,6 +47,18 @@ internal sealed class Room
         get { lock (_gate) return _online.Count; }
     }
 
+    /// <summary>Snapshot of the currently-connected member addresses (for the management roster).</summary>
+    public IReadOnlyList<string> OnlineMembers()
+    {
+        lock (_gate) return _online.ToList();
+    }
+
+    /// <summary>Wipe the room's stored history (admin "clear history").</summary>
+    public void ClearHistory() => _store.Clear();
+
+    /// <summary>Apply a per-room retention override at runtime (admin settings).</summary>
+    public void SetRetention(int maxMessages) => _store.SetRetention(maxMessages);
+
     // ---- lifecycle events (roster + presence, ADR-0007 §5/§8) ----
 
     /// <summary>A member's connection became established: add to roster, send them

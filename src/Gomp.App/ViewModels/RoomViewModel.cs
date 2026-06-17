@@ -20,6 +20,7 @@ public sealed partial class RoomViewModel : ObservableObject, IRoomObserver
     private readonly string _self;
     private readonly Func<RoomViewModel, MemberViewModel, Task>? _remove;
     private readonly Func<RoomViewModel, Task>? _leave;
+    private readonly Func<RoomViewModel, Task>? _manage;
     private IRoomHandle? _handle;
     private bool _rosterPrimed;
 
@@ -31,22 +32,30 @@ public sealed partial class RoomViewModel : ObservableObject, IRoomObserver
         AdminContext? admin = null,
         Func<RoomViewModel, MemberViewModel, Task>? remove = null,
         Func<RoomViewModel, Task>? leave = null,
-        string? title = null)
+        string? title = null,
+        Func<RoomViewModel, Task>? manage = null)
     {
         Address = address;
-        Kind = kind;
+        _kind = kind;
         _self = selfAddress;
         _ui = ui;
         Admin = admin;
         _remove = remove;
         _leave = leave;
-        Title = string.IsNullOrWhiteSpace(title) ? Addr.Short(address) : title;
+        _manage = manage;
+        _title = string.IsNullOrWhiteSpace(title) ? Addr.Short(address) : title;
     }
 
     public string Address { get; }
-    public string Title { get; }
-    public RoomKind Kind { get; }
     public AdminContext? Admin { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Initial))]
+    private string _title;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(KindLabel))]
+    private RoomKind _kind;
 
     public bool IsOwner => Admin is not null;
 
@@ -61,6 +70,13 @@ public sealed partial class RoomViewModel : ObservableObject, IRoomObserver
         RoomKind.Invite => "invite only",
         _ => "room",
     };
+
+    /// <summary>Reflect a host-side visibility change (from the management page).</summary>
+    internal void ApplyKind(RoomKind kind) => Kind = kind;
+
+    /// <summary>Reflect a host-side display-name change; empty falls back to the short address.</summary>
+    internal void SetDisplayName(string displayName) =>
+        Title = string.IsNullOrWhiteSpace(displayName) ? Addr.Short(Address) : displayName;
 
     public ObservableCollection<MessageViewModel> Messages { get; } = new();
     public ObservableCollection<MemberViewModel> Members { get; } = new();
@@ -104,6 +120,10 @@ public sealed partial class RoomViewModel : ObservableObject, IRoomObserver
 
     [RelayCommand]
     private Task LeaveAsync() => _leave is null ? Task.CompletedTask : _leave(this);
+
+    /// <summary>Open the management page for this room (owner only).</summary>
+    [RelayCommand]
+    private Task ManageAsync() => _manage is null ? Task.CompletedTask : _manage(this);
 
     /// <summary>Relay a member-initiated remove up to the shell (owner only).</summary>
     internal Task RemoveMember(MemberViewModel member) =>

@@ -61,4 +61,44 @@ public sealed class RoomCatalogTests
 
         Assert.False(RoomCatalog.Load(dir).Contains("lobby"));
     }
+
+    [Fact]
+    public void SetKind_ChangesKind_AndPersists()
+    {
+        var dir = TempDir();
+        var c = RoomCatalog.Load(dir);
+        c.Put(new RoomRecord("snug", RoomKind.Open, Array.Empty<string>()));
+
+        var updated = c.SetKind("snug", RoomKind.Invite);
+        Assert.NotNull(updated);
+        Assert.Equal(RoomKind.Invite, updated!.Kind);
+        Assert.Null(c.SetKind("snug", RoomKind.Invite));   // unchanged → no-op
+        Assert.Null(c.SetKind("ghost", RoomKind.Open));    // unknown → null
+
+        Assert.True(RoomCatalog.Load(dir).TryGet("snug", out var rec));
+        Assert.Equal(RoomKind.Invite, rec.Kind);
+    }
+
+    [Fact]
+    public void UpdateMeta_SetsDisplayTopicRetention_AndPersists()
+    {
+        var dir = TempDir();
+        var c = RoomCatalog.Load(dir);
+        c.Put(new RoomRecord("snug", RoomKind.Invite, new[] { "Ea" }));
+
+        var updated = c.UpdateMeta("snug", "The Snug", "after hours", 250);
+        Assert.NotNull(updated);
+        Assert.Equal("The Snug", updated!.DisplayName);
+        Assert.Equal("after hours", updated.Topic);
+        Assert.Equal(250, updated.RetentionMax);
+        Assert.Equal(new[] { "Ea" }, updated.Members);     // members untouched
+        Assert.Null(c.UpdateMeta("ghost", "x", "y", 1));   // unknown → null
+
+        c.Put(new RoomRecord("other", RoomKind.Open, Array.Empty<string>()));
+        Assert.Equal(0, c.UpdateMeta("other", "", "", -5)!.RetentionMax); // negative clamps to 0
+
+        Assert.True(RoomCatalog.Load(dir).TryGet("snug", out var rec));
+        Assert.Equal("The Snug", rec.DisplayName);
+        Assert.Equal("after hours", rec.Topic);
+    }
 }

@@ -123,8 +123,13 @@
                                            IsVisible="{Binding SelectedRoom.IsOwner}" />
                             </StackPanel>
                         </StackPanel>
-                        <Button Grid.Column="1" Classes="link" VerticalAlignment="Center"
-                                Command="{Binding SelectedRoom.LeaveCommand}" Content="leave" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14"
+                                    VerticalAlignment="Center">
+                            <Button Classes="link" Command="{Binding SelectedRoom.ManageCommand}"
+                                    IsVisible="{Binding SelectedRoom.IsOwner}"
+                                    ToolTip.Tip="manage this room" Content="⚙ manage" />
+                            <Button Classes="link" Command="{Binding SelectedRoom.LeaveCommand}" Content="leave" />
+                        </StackPanel>
                     </Grid>
 
                     <!-- forgery flag -->
@@ -340,6 +345,174 @@
                                 Content="close room" />
                     </StackPanel>
                 </StackPanel>
+            </Border>
+        </Panel>
+
+        <!-- ===================== MANAGE ROOM (owner) ===================== -->
+        <Panel IsVisible="{Binding IsManageOpen}" Background="#B0000000">
+            <Border Classes="card" Width="560" MaxHeight="700" VerticalAlignment="Center"
+                    HorizontalAlignment="Center" Padding="0"
+                    DataContext="{Binding Manage}" x:DataType="vm:ManageRoomViewModel">
+                <Grid RowDefinitions="Auto,*,Auto">
+
+                    <!-- header -->
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="26,24,22,8">
+                        <StackPanel>
+                            <TextBlock Classes="h1" Text="{Binding Title}" />
+                            <TextBlock Classes="faint" Text="manage room" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="link" VerticalAlignment="Top"
+                                Command="{Binding DoneCommand}" Content="✕" />
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" Padding="26,8,20,8" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <!-- Fixed content width so wrapping text and right-aligned buttons
+                             stay clear of the scrollbar (the card is a fixed 560). -->
+                        <StackPanel Spacing="22" Width="492" HorizontalAlignment="Left">
+
+                            <!-- address -->
+                            <StackPanel Spacing="7">
+                                <TextBlock Classes="label" Text="ROOM ADDRESS" />
+                                <Border Background="{StaticResource BgSurface}" Padding="12,9"
+                                        CornerRadius="{StaticResource RadiusMd}"
+                                        BorderBrush="{StaticResource Hairline}" BorderThickness="1">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="mono" FontSize="12" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" Text="{Binding RoomAddress}"
+                                                   Foreground="{StaticResource AccentGlow}" />
+                                        <Button Grid.Column="1" Classes="link" Click="OnCopyRoomAddress"
+                                                ToolTip.Tip="copy the room address" Content="copy" />
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- access / visibility -->
+                            <StackPanel Spacing="7">
+                                <TextBlock Classes="label" Text="WHO CAN JOIN" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                    <ComboBox Grid.Column="0" HorizontalAlignment="Stretch"
+                                              ItemsSource="{Binding Kinds}"
+                                              SelectedItem="{Binding SelectedKindOption, Mode=TwoWay}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:KindOption">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                                    <TextBlock Classes="faint" Text="{Binding Hint}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Button Grid.Column="1" Classes="ghost" Content="apply"
+                                            IsEnabled="{Binding !IsBusy}"
+                                            Command="{Binding ApplyVisibilityCommand}" />
+                                </Grid>
+                                <TextBlock Classes="faint" TextWrapping="Wrap"
+                                           Text="Changing visibility keeps the room's address and history; connected members briefly reconnect." />
+                            </StackPanel>
+
+                            <!-- members -->
+                            <StackPanel Spacing="9">
+                                <TextBlock Classes="label" Text="MEMBERS" />
+
+                                <!-- add (invite rooms only) -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10"
+                                      IsVisible="{Binding IsInvite}">
+                                    <TextBox Grid.Column="0" FontFamily="{StaticResource FontMono}" FontSize="12"
+                                             Watermark="paste an address — E…"
+                                             Text="{Binding NewMemberAddress, Mode=TwoWay}" />
+                                    <Button Grid.Column="1" Classes="primary" Content="add"
+                                            IsEnabled="{Binding !IsBusy}" Command="{Binding AddMemberCommand}" />
+                                </Grid>
+
+                                <ItemsControl ItemsSource="{Binding Members}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ManageMemberViewModel">
+                                            <Border Classes="msgRow" Padding="9,7"
+                                                    CornerRadius="{StaticResource RadiusMd}">
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <Ellipse Grid.Column="0" Classes="dot"
+                                                             Classes.online="{Binding IsOnline}"
+                                                             VerticalAlignment="Center" Margin="2,0,11,0" />
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                                VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                                                                   Foreground="{Binding NameColorHex, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                                                        <Border Classes="accentChip" Padding="6,0" VerticalAlignment="Center"
+                                                                IsVisible="{Binding IsSelf}">
+                                                            <TextBlock Text="you" FontSize="10"
+                                                                       Foreground="{StaticResource AccentGlow}" />
+                                                        </Border>
+                                                        <Border Classes="accentChip" Padding="6,0" VerticalAlignment="Center"
+                                                                IsVisible="{Binding IsAdmin}">
+                                                            <TextBlock Text="admin" FontSize="10"
+                                                                       Foreground="{StaticResource AccentGlow}" />
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                                                VerticalAlignment="Center">
+                                                        <Button Classes="link" Content="make admin" FontSize="12"
+                                                                IsVisible="{Binding CanPromote}"
+                                                                Command="{Binding PromoteCommand}" />
+                                                        <Button Classes="link" Content="unadmin" FontSize="12"
+                                                                IsVisible="{Binding CanDemote}"
+                                                                Command="{Binding DemoteCommand}" />
+                                                        <Button Classes="danger" Content="remove" FontSize="12"
+                                                                IsVisible="{Binding CanRemove}"
+                                                                Command="{Binding RemoveCommand}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- settings -->
+                            <StackPanel Spacing="11">
+                                <TextBlock Classes="label" Text="SETTINGS" />
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="faint" Text="Display name" />
+                                    <TextBox Watermark="a friendly name (the slug stays the address)"
+                                             Text="{Binding DisplayName, Mode=TwoWay}" />
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="faint" Text="Topic" />
+                                    <TextBox Watermark="what's this room about?"
+                                             Text="{Binding Topic, Mode=TwoWay}" />
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Classes="faint" Text="History kept (messages — 0 uses the host default)" />
+                                    <TextBox Width="160" HorizontalAlignment="Left"
+                                             Text="{Binding RetentionMax, Mode=TwoWay}" />
+                                </StackPanel>
+                                <Button Classes="primary" HorizontalAlignment="Left" Content="save settings"
+                                        IsEnabled="{Binding !IsBusy}" Command="{Binding SaveSettingsCommand}" />
+                            </StackPanel>
+
+                            <!-- danger zone -->
+                            <StackPanel Spacing="9">
+                                <TextBlock Classes="label" Text="DANGER ZONE" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button Classes="ghost" Content="clear history"
+                                            IsEnabled="{Binding !IsBusy}" Command="{Binding ClearHistoryCommand}" />
+                                    <Button Classes="danger" Content="close room"
+                                            IsEnabled="{Binding !IsBusy}" Command="{Binding CloseRoomCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- footer: status + done -->
+                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="26,8,22,22">
+                        <TextBlock Classes="faint" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   Text="{Binding Status}" Foreground="{StaticResource AccentGlow}"
+                                   IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <Button Grid.Column="1" Classes="primary" Content="done"
+                                Command="{Binding DoneCommand}" />
+                    </Grid>
+                </Grid>
             </Border>
         </Panel>
 

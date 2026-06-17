@@ -36,6 +36,12 @@ public interface IGompGateway : IAsyncDisposable
     Task<AdminResult> RemoveMemberAsync(string hostBase, string room, string addr, CancellationToken ct = default);
     Task<AdminResult> PromoteAdminAsync(string hostBase, string addr, CancellationToken ct = default);
     Task<AdminResult> DemoteAdminAsync(string hostBase, string addr, CancellationToken ct = default);
+
+    // ---- room management (the management page) ----
+    Task<AdminResult> RoomDetailAsync(string hostBase, string room, CancellationToken ct = default);
+    Task<AdminResult> SetKindAsync(string hostBase, string room, RoomKind kind, CancellationToken ct = default);
+    Task<AdminResult> ClearHistoryAsync(string hostBase, string room, CancellationToken ct = default);
+    Task<AdminResult> UpdateRoomAsync(string hostBase, string room, string displayName, string topic, int retentionMax, CancellationToken ct = default);
 }
 
 /// <summary>

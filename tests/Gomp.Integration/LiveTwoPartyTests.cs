@@ -210,6 +210,44 @@ public sealed class LiveTwoPartyTests
             Assert.Empty(obsClub.Errors);
             _out.WriteLine("Invite room 'club': added member B admitted, posted, fan-out OK");
 
+            // ===== 6c. management ops via the local operator door (ExecuteAdminAsync) =====
+            // The frontend's management page drives these against its OWN host. The
+            // e2e's member→host admin dial doesn't carry them, so exercise the live
+            // handlers directly: read detail, change visibility (a sub-identity
+            // re-register), edit settings, clear history, close.
+            var mk = await host.ExecuteAdminAsync(new AdminRequest { CreateRoom = new CreateRoom { Name = "mgmt", Kind = RoomKind.Open } });
+            Assert.True(mk.Ok, $"create mgmt failed: {mk.Error}");
+            var mgmtAddr = mk.Rooms.Single().Addr;
+
+            var det0 = await host.ExecuteAdminAsync(new AdminRequest { RoomDetail = new RoomDetail { Room = "mgmt" } });
+            Assert.True(det0.Ok);
+            Assert.Equal(RoomKind.Open, det0.Detail.Kind);
+
+            // Change visibility Open -> Invite. The sub-identity re-registers; assert
+            // its E-address is preserved (derived from <host>/<name>, not the ACL).
+            var sk = await host.ExecuteAdminAsync(new AdminRequest { SetKind = new SetKind { Room = "mgmt", Kind = RoomKind.Invite } });
+            Assert.True(sk.Ok, $"set_kind failed: {sk.Error}");
+            var seam = await host.DebugRoomServiceAsync("mgmt");
+            Assert.Equal(mgmtAddr, seam!.Value.Address);
+            var det1 = await host.ExecuteAdminAsync(new AdminRequest { RoomDetail = new RoomDetail { Room = "mgmt" } });
+            Assert.Equal(RoomKind.Invite, det1.Detail.Kind);
+
+            var up = await host.ExecuteAdminAsync(new AdminRequest
+            {
+                UpdateRoom = new UpdateRoom { Room = "mgmt", DisplayName = "Mgmt Room", Topic = "ops", RetentionMax = 50 },
+            });
+            Assert.True(up.Ok, $"update_room failed: {up.Error}");
+            var det2 = await host.ExecuteAdminAsync(new AdminRequest { RoomDetail = new RoomDetail { Room = "mgmt" } });
+            Assert.Equal("Mgmt Room", det2.Detail.DisplayName);
+            Assert.Equal("ops", det2.Detail.Topic);
+            Assert.Equal(50, det2.Detail.RetentionMax);
+
+            var ch = await host.ExecuteAdminAsync(new AdminRequest { ClearHistory = new ClearHistory { Room = "mgmt" } });
+            Assert.True(ch.Ok, $"clear_history failed: {ch.Error}");
+            var rm = await host.ExecuteAdminAsync(new AdminRequest { CloseRoom = new CloseRoom { Name = "mgmt" } });
+            Assert.True(rm.Ok, $"close mgmt failed: {rm.Error}");
+            _out.WriteLine("management ops OK (detail/set_kind/update/clear/close); address preserved across visibility change");
+
             // ===== 7. Forged: a malicious-host fan-out under A's name, bad signature =====
             await InjectAsHostAsync(host, "general", roomAddr, bAddr,
                 sender: aAddr, content: "forged-words", sig: new byte[64], seq: 9001);

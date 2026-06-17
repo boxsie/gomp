@@ -73,6 +73,12 @@ message AdminOp {
     RemoveMember remove  = 7;
     PromoteAdmin promote = 8;
     DemoteAdmin  demote  = 9;
+    // Management-page ops: carry the rooms.proto messages directly (the backend
+    // forwards them verbatim to its RoomHost), so there's nothing to re-map.
+    ensemble.rooms.v1.SetKind      set_kind      = 10;
+    ensemble.rooms.v1.ClearHistory clear_history = 11;
+    ensemble.rooms.v1.UpdateRoom   update        = 12;
+    ensemble.rooms.v1.RoomDetail   detail        = 13;
   }
 }
 
@@ -171,10 +177,14 @@ message AdminResult {
   bool                 ok         = 2;
   string               error      = 3;
   repeated RoomSummary rooms      = 4;
+  // Populated for a `detail` op — reused verbatim from the rooms wire so the
+  // backend copies one reference instead of re-mapping the member list.
+  ensemble.rooms.v1.RoomDetailInfo detail = 5;
 }
 
 message RoomSummary {
-  string                     name = 1;
-  string                     addr = 2;
-  ensemble.rooms.v1.RoomKind kind = 3;
+  string                     name         = 1;
+  string                     addr         = 2;
+  ensemble.rooms.v1.RoomKind kind         = 3;
+  string                     display_name = 4;  // friendly name (falls back to the slug)
 }

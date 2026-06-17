@@ -168,6 +168,10 @@ message AdminRequest {
     RemoveMember remove_member = 6;  // revokes + kicks if connected
     PromoteAdmin promote_admin = 7;
     DemoteAdmin  demote_admin  = 8;
+    SetKind      set_kind      = 9;   // change visibility/ACL tier (re-registers the sub-identity)
+    ClearHistory clear_history = 10;  // wipe the room's stored history
+    UpdateRoom   update_room   = 11;  // display name / topic / per-room retention
+    RoomDetail   room_detail   = 12;  // read full members + settings for the management page
   }
 }
 
@@ -201,17 +205,65 @@ message DemoteAdmin {
   string addr = 1;
 }
 
+// Change a room's visibility/ACL tier (Open<->Friends<->Invite). The sub-identity
+// keeps its E-address (derived deterministically from <host>/<name>) and its
+// history, but its gate is rebuilt — connected members transiently reconnect.
+message SetKind {
+  string   room = 1;
+  RoomKind kind = 2;
+}
+
+// Wipe a room's stored history (the backfill log). Live membership is untouched.
+message ClearHistory {
+  string room = 1;
+}
+
+// Mutable room metadata. Sent as a whole snapshot from the management form:
+// display_name/topic empty clears them; retention_max 0 means "use the global
+// ROOM_HISTORY_MAX default".
+message UpdateRoom {
+  string room          = 1;
+  string display_name  = 2;
+  string topic         = 3;
+  int32  retention_max = 4;
+}
+
+// Read a room's full management detail (the members + settings the page renders).
+message RoomDetail {
+  string room = 1;
+}
+
 message AdminResponse {
   string            request_id = 1;
   bool              ok         = 2;
   string            error      = 3;  // populated when ok=false
   repeated RoomInfo rooms      = 4;  // create_room: the new room; list_rooms: all rooms
+  RoomDetailInfo    detail     = 5;  // populated for a room_detail op
 }
 
 message RoomInfo {
-  string   name    = 1;
-  string   addr    = 2;  // the room's E-address — share to invite members to dial
-  RoomKind kind    = 3;
-  int32    members = 4;  // allowlist size (invite rooms)
-  int32    online  = 5;  // currently connected members
+  string   name         = 1;
+  string   addr         = 2;  // the room's E-address — share to invite members to dial
+  RoomKind kind         = 3;
+  int32    members      = 4;  // allowlist size (invite rooms)
+  int32    online       = 5;  // currently connected members
+  string   display_name = 6;  // friendly name (falls back to the slug if empty)
+  string   topic        = 7;  // room topic/description
+}
+
+// The management-page view of a room: its settings plus the full member list
+// (allowlist ∪ currently-online), each flagged admin/online.
+message RoomDetailInfo {
+  string              name          = 1;
+  RoomKind            kind          = 2;
+  string              display_name  = 3;
+  string              topic         = 4;
+  int32               retention_max = 5;  // 0 = global default
+  repeated MemberInfo members       = 6;
+}
+
+message MemberInfo {
+  string addr     = 1;
+  bool   is_admin = 2;
+  bool   online   = 3;
 }

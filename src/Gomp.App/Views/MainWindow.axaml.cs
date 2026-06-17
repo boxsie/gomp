@@ -80,4 +80,13 @@ public partial class MainWindow : Window
             await clipboard.SetTextAsync(addr);
         }
     }
+
+    private async void OnCopyRoomAddress(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel { Manage.RoomAddress: { Length: > 0 } addr }
+            && GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(addr);
+        }
+    }
 }

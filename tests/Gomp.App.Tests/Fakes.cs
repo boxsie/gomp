@@ -115,7 +115,10 @@ internal sealed class FakeGateway : IGompGateway, IGompGatewayFactory
     }
 
     public Task<AdminResult> AddMemberAsync(string hostBase, string room, string addr, CancellationToken ct = default)
-        => Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    {
+        Added.Add((hostBase, room, addr));
+        return Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    }
 
     public Task<AdminResult> RemoveMemberAsync(string hostBase, string room, string addr, CancellationToken ct = default)
     {
@@ -123,11 +126,55 @@ internal sealed class FakeGateway : IGompGateway, IGompGatewayFactory
         return Task.FromResult(RemoveResult);
     }
 
+    public List<(string Host, string Addr)> Promoted { get; } = new();
+    public List<(string Host, string Addr)> Demoted { get; } = new();
+
     public Task<AdminResult> PromoteAdminAsync(string hostBase, string addr, CancellationToken ct = default)
-        => Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    {
+        Promoted.Add((hostBase, addr));
+        return Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    }
 
     public Task<AdminResult> DemoteAdminAsync(string hostBase, string addr, CancellationToken ct = default)
-        => Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    {
+        Demoted.Add((hostBase, addr));
+        return Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    }
+
+    // ---- room management ----
+    public List<(string Host, string Room)> Detailed { get; } = new();
+    public List<(string Host, string Room, RoomKind Kind)> KindSet { get; } = new();
+    public List<(string Host, string Room)> Histories { get; } = new();
+    public List<(string Host, string Room, string Display, string Topic, int Retention)> Updated { get; } = new();
+    public List<(string Host, string Room, string Addr)> Added { get; } = new();
+
+    /// <summary>The detail a <see cref="RoomDetailAsync"/> returns; default has no members.</summary>
+    public Gomp.App.Services.RoomDetail DetailResult { get; set; } =
+        new(RoomKind.Invite, "", "", 0, Array.Empty<RoomMemberInfo>());
+
+    public Task<AdminResult> RoomDetailAsync(string hostBase, string room, CancellationToken ct = default)
+    {
+        Detailed.Add((hostBase, room));
+        return Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>(), DetailResult));
+    }
+
+    public Task<AdminResult> SetKindAsync(string hostBase, string room, RoomKind kind, CancellationToken ct = default)
+    {
+        KindSet.Add((hostBase, room, kind));
+        return Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    }
+
+    public Task<AdminResult> ClearHistoryAsync(string hostBase, string room, CancellationToken ct = default)
+    {
+        Histories.Add((hostBase, room));
+        return Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    }
+
+    public Task<AdminResult> UpdateRoomAsync(string hostBase, string room, string displayName, string topic, int retentionMax, CancellationToken ct = default)
+    {
+        Updated.Add((hostBase, room, displayName, topic, retentionMax));
+        return Task.FromResult(new AdminResult(true, null, Array.Empty<RoomSummary>()));
+    }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

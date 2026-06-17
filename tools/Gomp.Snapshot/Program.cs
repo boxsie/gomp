@@ -29,7 +29,18 @@ internal static class Program
 
         Render(BuildConnect(), Path.Combine(outDir, "01-connect.png"));
         Render(BuildRoom(), Path.Combine(outDir, "02-room.png"));
+        Render(BuildManage(), Path.Combine(outDir, "03-manage.png"));
         Console.WriteLine("snapshots written to " + Path.GetFullPath(outDir));
+    }
+
+    private static MainWindowViewModel BuildManage()
+    {
+        var vm = BuildRoom();
+        var room = vm.Rooms.First(r => r.IsOwner);
+        vm.SelectedRoom = room;
+        room.ManageCommand.Execute(null);   // opens the overlay + loads detail (SampleGateway)
+        Dispatcher.UIThread.RunJobs();
+        return vm;
     }
 
     private static void Render(MainWindowViewModel vm, string path)

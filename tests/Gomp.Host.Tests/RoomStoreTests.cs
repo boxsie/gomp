@@ -27,6 +27,43 @@ public sealed class RoomStoreTests
     }
 
     [Fact]
+    public void Clear_EmptiesHistoryAndResetsCursor()
+    {
+        var dir = TempDir();
+        var store = RoomStore.Open(dir, "r", 100);
+        for (var i = 0; i < 4; i++) store.Append(Posts.Make("a", "r", $"m{i}"), i);
+        Assert.Equal(4, store.LatestSeq);
+
+        store.Clear();
+        Assert.Equal(0, store.LatestSeq);
+        Assert.Empty(store.Backfill(0, 0).Messages);
+
+        // Survives reopen (the file was rewritten empty) and a new append starts at 1.
+        var reopened = RoomStore.Open(dir, "r", 100);
+        Assert.Equal(0, reopened.LatestSeq);
+        Assert.Equal(1, reopened.Append(Posts.Make("a", "r", "fresh"), 9).Seq);
+    }
+
+    [Fact]
+    public void SetRetention_LowersCap_TrimsTail()
+    {
+        var store = RoomStore.Open(TempDir(), "r", 100);
+        for (var i = 0; i < 6; i++) store.Append(Posts.Make("a", "r", $"m{i}"), i);
+        Assert.Equal(6, store.Backfill(0, 0).Messages.Count);
+
+        store.SetRetention(2);
+        Assert.Equal(2, store.MaxMessages);
+        var kept = store.Backfill(0, 0).Messages;
+        Assert.Equal(2, kept.Count);
+        Assert.Equal(5, kept[0].Seq);   // 1..4 dropped
+        Assert.Equal(6, kept[1].Seq);
+        Assert.Equal(6, store.LatestSeq); // cursor unchanged
+
+        store.SetRetention(0); // ignored — no-op
+        Assert.Equal(2, store.MaxMessages);
+    }
+
+    [Fact]
     public void Append_AssignsMonotonicSeq()
     {
         var store = RoomStore.Open(TempDir(), "r", 100);

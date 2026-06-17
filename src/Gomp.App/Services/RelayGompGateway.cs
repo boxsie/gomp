@@ -136,6 +136,25 @@ internal sealed class RelayGompGateway : IGompGateway
     public Task<AdminResult> DemoteAdminAsync(string hostBase, string addr, CancellationToken ct = default)
         => AdminAsync(hostBase, op => op.Demote = new Gw.DemoteAdmin { Addr = addr }, ct);
 
+    public Task<AdminResult> RoomDetailAsync(string hostBase, string room, CancellationToken ct = default)
+        => AdminAsync(hostBase, op => op.Detail = new Gomp.Protocol.RoomDetail { Room = room }, ct);
+
+    public Task<AdminResult> SetKindAsync(string hostBase, string room, RoomKind kind, CancellationToken ct = default)
+        => AdminAsync(hostBase, op => op.SetKind = new SetKind { Room = room, Kind = kind }, ct);
+
+    public Task<AdminResult> ClearHistoryAsync(string hostBase, string room, CancellationToken ct = default)
+        => AdminAsync(hostBase, op => op.ClearHistory = new ClearHistory { Room = room }, ct);
+
+    public Task<AdminResult> UpdateRoomAsync(
+        string hostBase, string room, string displayName, string topic, int retentionMax, CancellationToken ct = default)
+        => AdminAsync(hostBase, op => op.Update = new UpdateRoom
+        {
+            Room = room,
+            DisplayName = displayName,
+            Topic = topic,
+            RetentionMax = retentionMax,
+        }, ct);
+
     private async Task<AdminResult> AdminAsync(string hostBase, Action<Gw.AdminOp> fill, CancellationToken ct)
     {
         var op = new Gw.AdminOp { RequestId = Guid.NewGuid().ToString("N"), HostBase = hostBase };
@@ -183,8 +202,17 @@ internal sealed class RelayGompGateway : IGompGateway
 
     private static AdminResult ToAdminResult(Gw.AdminResult r)
     {
-        var rooms = r.Rooms.Select(x => new RoomSummary(x.Name, x.Addr, x.Kind)).ToList();
-        return new AdminResult(r.Ok, string.IsNullOrEmpty(r.Error) ? null : r.Error, rooms);
+        var rooms = r.Rooms.Select(x => new RoomSummary(x.Name, x.Addr, x.Kind, x.DisplayName)).ToList();
+        return new AdminResult(r.Ok, string.IsNullOrEmpty(r.Error) ? null : r.Error, rooms, ToRoomDetail(r.Detail));
+    }
+
+    private static RoomDetail? ToRoomDetail(RoomDetailInfo? d)
+    {
+        if (d is null || string.IsNullOrEmpty(d.Name)) return null;
+        var members = d.Members
+            .Select(m => new RoomMemberInfo(m.Addr, m.IsAdmin, m.Online))
+            .ToList();
+        return new RoomDetail(d.Kind, d.DisplayName, d.Topic, d.RetentionMax, members);
     }
 
     public async ValueTask DisposeAsync()

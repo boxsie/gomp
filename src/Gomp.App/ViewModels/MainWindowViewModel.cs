@@ -208,7 +208,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
 
             var admin = new AdminContext(host, room.Name, CanRemove: room.Kind == RoomKind.Invite);
-            await JoinAsync(room.Address, room.Kind, admin, room.Name).ConfigureAwait(true);
+            await JoinAsync(room.Address, room.Kind, admin, TitleFor(room)).ConfigureAwait(true);
             IsCreateOpen = false;
         }
         catch (Exception ex)
@@ -249,9 +249,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (string.IsNullOrEmpty(room.Address) || Rooms.Any(r => r.Address == room.Address))
                 continue;
             var admin = new AdminContext(SelfAddress, room.Name, CanRemove: room.Kind == RoomKind.Invite);
-            await JoinAsync(room.Address, room.Kind, admin, room.Name).ConfigureAwait(true);
+            await JoinAsync(room.Address, room.Kind, admin, TitleFor(room)).ConfigureAwait(true);
         }
     }
+
+    // A room card's title: the friendly display name if the host has one, else the slug.
+    private static string TitleFor(RoomSummary room) =>
+        string.IsNullOrWhiteSpace(room.DisplayName) ? room.Name : room.DisplayName;
 
     private async Task JoinAsync(string address, RoomKind kind, AdminContext? admin = null, string? title = null)
     {
@@ -265,7 +269,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var room = new RoomViewModel(address, kind, _gateway.SelfAddress, _ui, admin, RemoveMemberAsync, LeaveRoomAsync, title);
+        // Only an owned room gets the management affordance.
+        var manage = admin is not null ? ShowManageAsync : (Func<RoomViewModel, Task>?)null;
+        var room = new RoomViewModel(address, kind, _gateway.SelfAddress, _ui, admin, RemoveMemberAsync, LeaveRoomAsync, title, manage);
         var handle = await _gateway.JoinAsync(address, room).ConfigureAwait(true);
         room.Attach(handle);
         Rooms.Add(room);
@@ -346,6 +352,47 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsLeaveConfirmOpen = false;
         LeaveRoomTitle = null;
         _leaveTarget = null;
+    }
+
+    // ---- room management overlay (owner only) ----
+
+    [ObservableProperty]
+    private bool _isManageOpen;
+
+    [ObservableProperty]
+    private ManageRoomViewModel? _manage;
+
+    private async Task ShowManageAsync(RoomViewModel room)
+    {
+        if (_gateway is null || !room.IsOwner)
+            return;
+
+        var vm = new ManageRoomViewModel(_gateway, room, CloseRoomFromManageAsync, CloseManage);
+        Manage = vm;
+        IsManageOpen = true;
+        await vm.LoadAsync().ConfigureAwait(true);
+    }
+
+    private void CloseManage()
+    {
+        IsManageOpen = false;
+        Manage = null;
+    }
+
+    // The manager's "close room" — tears the room down on the host and drops the
+    // card, same as the leave→close path but reached from the management page.
+    private async Task CloseRoomFromManageAsync(RoomViewModel room)
+    {
+        if (_gateway is null || room.Admin is null)
+            return;
+
+        var res = await _gateway.CloseRoomAsync(room.Admin.HostBase, room.Admin.RoomName).ConfigureAwait(true);
+        if (!res.Ok)
+        {
+            room.AddSystem($"couldn't close the room: {res.Error}");
+            return;
+        }
+        RemoveRoomCard(room);
     }
 
     private async Task RemoveMemberAsync(RoomViewModel room, MemberViewModel member)
