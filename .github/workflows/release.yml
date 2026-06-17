@@ -44,11 +44,12 @@ jobs:
       - name: Package
         run: |
           VERSION="${TAG#v}"
-          # amd64 (not the .NET RID "x64") so the artifact name matches the
-          # ensemble registry's platform key (linux-amd64) for installs.
-          DIR="gomp-${VERSION}-linux-amd64"
-          mv bundle "$DIR"
-          tar -czf "${DIR}.tar.gz" "$DIR"
+          # The registry extracts into .staging/<sha>/ and reads
+          # ensemble-service.yaml at the archive ROOT — so tar the bundle
+          # CONTENTS (gomp-host, client/, manifest), NOT a wrapper dir.
+          # The file is still named -linux-amd64 to match the registry's
+          # platform key for installs.
+          tar -C bundle -czf "gomp-${VERSION}-linux-amd64.tar.gz" .
 
       - name: Create GitHub Release
         env:
